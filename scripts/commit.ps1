@@ -9,7 +9,6 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
-$env:GIT_MASTER = "1"
 
 if ($AllTracked) {
   & git add -u

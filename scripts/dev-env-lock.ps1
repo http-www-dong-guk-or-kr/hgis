@@ -237,25 +237,18 @@ if (-not $OsgeoOnly) {
   [void](Compare-Entry "Python" $lock.tools.python $snapshot.tools.python 2 -WarnOnly)
   [void](Compare-Entry "clangd" $lock.tools.clangd $snapshot.tools.clangd 1 -WarnOnly)
 
-  # Cursor loads Graft from the USER-level MCP config, which holds this PC's paths.
-  $userHome = [Environment]::GetFolderPath('UserProfile')
-  $mcpFile = Join-Path $userHome ".cursor\mcp.json"
-  $graftCwd = $null
+  # Claude Code loads Graft from the committed project .mcp.json (server hgis_graft, path via CLAUDE_PROJECT_DIR),
+  # so no per-PC path is needed. Only warn when the file or the engine is missing.
+  $mcpFile = Join-Path $Repo ".mcp.json"
+  $graftTools = Join-Path $Repo "build\tooling\graft-source\dist\mcp\tools.js"
   if (Test-Path -LiteralPath $mcpFile) {
-    try {
-      $mcp = Get-Content -LiteralPath $mcpFile -Raw -Encoding UTF8 | ConvertFrom-Json
-      if ($mcp.mcpServers -and $mcp.mcpServers.hgis_graft) { $graftCwd = [string]$mcp.mcpServers.hgis_graft.cwd }
-    } catch { }
-  }
-  if ($graftCwd -and ((Get-NormalizedPath $graftCwd) -ieq (Get-NormalizedPath $Repo))) {
-    Write-Host ("[같음] Cursor MCP hgis_graft -> {0}" -f $graftCwd) -ForegroundColor Green
+    Write-Host ("[같음] Claude Code Graft 연결(.mcp.json hgis_graft): {0}" -f $mcpFile) -ForegroundColor Green
   } else {
-    if ($graftCwd) {
-      Write-Host ("[경고] Cursor MCP hgis_graft 가 다른 폴더를 가리킨다: {0}" -f $graftCwd) -ForegroundColor Yellow
-    } else {
-      Write-Host ("[경고] Cursor MCP 에 hgis_graft 가 없다: {0}" -f $mcpFile) -ForegroundColor Yellow
-    }
-    Write-Host "    이 체크아웃 경로로 넣는다: .\scripts\setup-dev-paths.ps1"
+    Write-Host ("[경고] .mcp.json 이 없다: {0}" -f $mcpFile) -ForegroundColor Yellow
+  }
+  if (-not (Test-Path -LiteralPath $graftTools)) {
+    Write-Host "[경고] Graft 엔진이 아직 설치되지 않았다." -ForegroundColor Yellow
+    Write-Host "    고정 판으로 설치한다: .\scripts\setup-claude-dev.bat"
   }
 
   if ($lock.paths -and $lock.paths.osgeo4wRoot -and

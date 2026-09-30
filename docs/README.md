@@ -1,15 +1,19 @@
 # ka-hgis 문서
 
-현행 목록은 이 한 장이다. 옛 스프린트 목표(`PO_GOAL_*`)와 Grok 지형도 핸드오프는 [archive/](archive/README.md)에 있다.
+현행 목록은 이 한 장이다. 옛 스프린트 목표(`PO_GOAL_*`)와 옛 AI 도구용 핸드오프는 [archive/](archive/README.md)에 있다.
 
 ## 지금 보는 곳
 
 | 문서 | 용도 |
 | --- | --- |
-| [AGENTS.md](../AGENTS.md) | Cursor 작업 규칙·제품 불변식 |
-| [.codex/NOW.md](../.codex/NOW.md) | 최근 세션 상태 |
+| [claude-code-guide.md](claude-code-guide.md) | Claude Code 로 개발하는 쉬운 안내(처음 세팅·매일 순서·명령 모음) |
+| [claude-code-settings.md](claude-code-settings.md) | Claude Code 설정이 왜 그렇게 되어 있는지·바꾸는 법 |
+| [../CLAUDE.md](../CLAUDE.md) | Claude Code 운영 지침(`AGENTS.md`를 가져옴) |
+| [../AGENTS.md](../AGENTS.md) | 제품 불변식·GIS 규칙·검증 게이트 |
+| [.codex/NOW.md](../.codex/NOW.md) | 최근 세션 상태(현행 일지. 폴더 이름만 낡음) |
 | [HANDOFF.md](HANDOFF.md) | 제품 현황 정본 (루트 HANDOFF.md는 안내만) |
 | [developer-tools.md](developer-tools.md) | 여섯 도구 루프 |
+| [ctest-baseline.txt](ctest-baseline.txt) | 알려진 ctest 실패(통과 기준은 "새 실패 없음") |
 | [testing-map.md](testing-map.md) | 축 A–J 자동 시험 |
 | [network-download-timeout-checklist.md](network-download-timeout-checklist.md) | 내려받기 취소·시간 제한·재시도·오프라인 문구 |
 | [clangd-navigation.md](clangd-navigation.md) | 선언·정의 조회 |

@@ -6,9 +6,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$cli = Join-Path $repoRoot '.agents\skills\archify\bin\archify.mjs'
+# Claude Code skill location first; the old Codex/Cursor location (.agents) is still honored if it exists.
+$cli = Join-Path $repoRoot '.claude\skills\archify\bin\archify.mjs'
 if (-not (Test-Path -LiteralPath $cli -PathType Leaf)) {
-  throw 'Project-local Archify is missing. Follow docs/archify-setup.md to install the pinned skill.'
+  $cli = Join-Path $repoRoot '.agents\skills\archify\bin\archify.mjs'
+}
+if (-not (Test-Path -LiteralPath $cli -PathType Leaf)) {
+  throw 'Project-local Archify is missing. Run scripts\setup-claude-dev.bat (or follow docs/archify-setup.md) to install the pinned revision into .claude\skills\archify.'
 }
 $nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $nodeCommand) {

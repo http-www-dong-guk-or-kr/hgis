@@ -1,0 +1,14 @@
+build/
+build-*/
+out/
+cmake-build-*/
+compile_commands.json
+.cache/
+.claude/settings.local.json
+.claude/*.local.*
+.claude/hooks/state/
+.claude/worktrees/
+CLAUDE.local.md
+.env
+.env.*
+!.env.example

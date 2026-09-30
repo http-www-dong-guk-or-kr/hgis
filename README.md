@@ -15,17 +15,19 @@ git clone https://github.com/kwonyoungin11/hgis.git
 cd hgis
 # 기준 PC와 같은 OSGeo4W 판을 복사해 온다 (install-deps 는 설치한 날의 qgis-dev 를 받는다)
 .\scripts\osgeo4w-bundle.ps1 -Import E:\ka-hgis-sdk
-.\scripts\setup-dev-paths.ps1    # Graft 경로를 이 체크아웃으로
+.\scripts\setup-claude-dev.bat   # Claude Code 개발설정 + Graft·Archify 설치 (더블클릭도 가능)
 
 .\scripts\bootstrap-dev-pc.ps1   # dev-env.lock.json 비교 + build + ctest + smoke
 .\scripts\run-ka-hgis.ps1
 ```
 
+Claude Code 로 개발하는 방법은 [`docs/claude-code-guide.md`](docs/claude-code-guide.md) (쉬운 안내), 설정이 왜 그렇게 되어 있는지는 [`docs/claude-code-settings.md`](docs/claude-code-settings.md).
+
 - **같은 환경:** 기준 PC 판은 `dev-env.lock.json`에 잠근다. `.\scripts\dev-env-lock.ps1`로 이 PC가 같은지 본다.
 - **개발:** 클론 + OSGeo4W(`qgis-dev`) + VS2022 + CMake → `bootstrap-dev-pc.ps1` 또는 `build-all.ps1`
 - **실행만:** 개발 PC에서 `.\scripts\make-portable.ps1` 후 `dist\ka-hgis-portable\` 폴더 전체를 복사 → `start.bat` (OSGeo4W 설치 불필요)
 - 조사 GPKG/SHP는 git에 없음 → 별도 복사
-- 규칙: `AGENTS.md` (Codex + QGIS 매뉴얼 연동) · `.codex/NOW.md` · `HANDOFF.md`
+- 규칙: `CLAUDE.md` → `AGENTS.md` (제품 불변식 + QGIS 매뉴얼 연동) · `.codex/NOW.md`(현행 일지, 폴더 이름만 낡음) · `docs/HANDOFF.md`
 
 ## 환경 (검증된 구성)
 - CMake는 `dev-env.lock.json`의 앞 두 자리 (`C:\Program Files\CMake\bin`, `C:\CMake\bin` 또는 PATH)
@@ -37,12 +39,12 @@ cd hgis
 ## 원클릭 빌드·검증
 ```powershell
 cd <클론한 폴더>
-.\scripts\setup-dev-paths.ps1
 .\scripts\build-all.ps1
 ```
 포함: cmake build → ctest → smoke-quit → e2e. 포터블 생성은 별도 요청 시에만 실행한다.
+Claude Code 안에서는 같은 일을 `scripts\ka-build.ps1`(빌드) · `scripts\ka-test.ps1`(시험, 알려진 실패 대비 "새 실패 없음" 판정) · `scripts\ka-smoke.ps1`(시작 확인) 래퍼로 한다. 상태 점검은 `scripts\ka-doctor.ps1`.
 clangd용 실제 컴파일 DB는 `.\scripts\gen-compile-commands.ps1`로 생성한다.
-Codex의 clangd 탐색·Graft 검색·Archify 구조도 설정과 사용 범위는 [`docs/developer-tools.md`](docs/developer-tools.md)를 따른다.
+Claude Code 의 clangd 탐색·Graft 검색·Archify 구조도 설정과 사용 범위는 [`docs/developer-tools.md`](docs/developer-tools.md)를 따른다.
 
 ## 수동 빌드
 ```powershell
@@ -91,7 +93,7 @@ cd dist\ka-hgis-portable
 - UX: `docs/ux/ia-beginner.md`
 - 데이터 흐름: `docs/architecture/data-flow.md`
 - 잡카드: `docs/user/job-cards/`
-- 에이전트: `AGENTS.md`, `HANDOFF.md`, `.grok/skills/ka-hgis/`
+- 에이전트: `CLAUDE.md`, `AGENTS.md`, `docs/HANDOFF.md`, `.claude/skills/`(도메인 스킬), `docs/claude-code-guide.md`
 
 ## 런타임 주의
 `PATH`에 `qgis-dev\bin`, `Qt6\bin`, `gdal-dev\bin`, **`pdal-dev\bin`** 필요 (`pdal-devcpp210.dll`).  

@@ -123,8 +123,9 @@ Write-Host @"
 
 Next:
   .\scripts\run-ka-hgis.ps1
-  # agent rules: AGENTS.md , .codex/NOW.md , HANDOFF.md
-  # skills travel with the repo: .agents/skills/ka-hgis-gis, heritage-intranet, ka-hgis-sheet, ka-hgis-verify
+  # Claude Code rules: CLAUDE.md (imports AGENTS.md) , .codex/NOW.md , docs/HANDOFF.md
+  # skills travel with the repo: .claude/skills/ka-hgis-gis, heritage-intranet, ka-hgis-sheet, ka-hgis-verify, ka-* commands
+  # first time on this PC: .\scripts\setup-claude-dev.bat (global settings, Graft, Archify, desktop icon)
   # daily sync (current work branch):
   git pull
   .\scripts\build-all.ps1

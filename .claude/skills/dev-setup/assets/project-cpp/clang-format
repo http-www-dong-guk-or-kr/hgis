@@ -1,0 +1,35 @@
+# C++ 코드 스타일 — Google 기반, 2칸 들여쓰기, 120열 (/개발설정이 새 프로젝트에 만든 기본값)
+# 기존 프로젝트에 맞추려면 실제 코드에서 실측해 이 값을 바꾼다(대량 재포맷은 요청이 있을 때만).
+---
+Language: Cpp
+BasedOnStyle: Google
+
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ColumnLimit: 120
+
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+
+# include 정렬: 자체 헤더(따옴표) → 표준 라이브러리(꺾쇠) → 외부 라이브러리
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+IncludeCategories:
+  - Regex: '^"'
+    Priority: 1
+  - Regex: '^<[a-z_]+(\.h)?>$'
+    Priority: 2
+  - Regex: '^<'
+    Priority: 3
+
+AccessModifierOffset: -1
+NamespaceIndentation: None
+FixNamespaceComments: true

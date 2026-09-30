@@ -1,4 +1,14 @@
 <!-- Recent window only. Older entries: docs/archive/NOW-before-2026-09-25.md -->
+## 2026-09-30 Claude Code(Opus 5.5) 개발설정 적용 (설정·문서만, C++ 소스 변경 없음)
+
+- 이제 개발 도구는 Claude Code 하나. `CLAUDE.md`(→`AGENTS.md`)·`.claude/settings.json`(모델 claude-opus-5-5, 노력 high, 한국어, 권한, 훅, 상태줄)·`.mcp.json`(Graft)·`.claude/{rules,skills,agents,output-styles,hooks}`가 저장소에 있다. 사용법 `docs/claude-code-guide.md`, 설정 이유 `docs/claude-code-settings.md`.
+- 스킬 `/개발설정`(`.claude/skills/dev-setup/`)이 전역(`~/.claude`)+프로젝트 개발설정을 멱등·백업 후 적용한다. `/ka-help·status·doctor·work·check·save·undo·run` 명령. PC 준비는 `scripts\setup-claude-dev.bat` 한 번, 시작은 `scripts\claude-dev.bat`. 래퍼 `ka-doctor/ka-build/ka-test/ka-smoke.ps1`. ctest 통과 기준은 "새 실패 없음"(`docs/ctest-baseline.txt`).
+- 도메인 스킬 4개는 `.agents/skills` → `.claude/skills`로 옮김(`git mv`). Archify 설치 위치도 `.claude/skills/archify`(커밋 안 함, 옛 위치도 인식).
+- 정리: `.cursor/` 전체, `.codex/NOW.md.local-main-backup-20260927`, `openai.yaml` 삭제. `setup-dev-paths.ps1`은 Codex·Cursor 파일 쓰기를 빼고 점검만. `dev-env-lock.ps1`의 Cursor MCP 점검은 `.mcp.json` 점검으로. `e2e-smoke.ps1` 증거 폴더 `.omo\...` → `build\qa\e2e`.
+- 남김(결정 필요): 자동 푸시 스크립트 3개(예약 작업이 이 PC에 있는지 먼저 확인), Cursor 워커·Orca 스크립트 2개(안전 점검이 이름만으로 막아 삭제 못 함), 훅의 계정 폴더 읽기 금지 중 `ka-hgis-verify` 영수증 읽기와 충돌하는 규칙.
+- 확인(Linux 클라우드): 훅 시험 157, 설치기 시험 65 통과. 설정 3개 스키마 검사(schemastore) 통과. 실제 `claude` 2.1.285가 모델·출력 스타일 ka-easy·스킬 13·에이전트 2를 읽고 `/개발설정 점검`을 스킬로 실행. 새/수정 `.ps1` 12개 PS7 구문 OK, PS7 전용 문법 없음, 한글 `.ps1` 전부 BOM, `.bat` ASCII. secret-scan OK.
+- **미확인(Windows PC 필요)**: `claude-dev.bat`·`setup-claude-dev.bat` 실행, `ka-doctor/ka-build/ka-test/ka-smoke` 실동작, Graft·Archify 설치, 한글 경로, Windows PowerShell 5.1 실행. 클라우드에서는 빌드·ctest·smoke를 하지 않았고 통과라고 쓰지 않는다. 커밋·푸시는 이 항목 작성 뒤 사용자 요청에 따라 브랜치 `claude/wonderful-sagan-jpzo7l`에만.
+
 ## 2026-09-28 측량 등고선이 맞다
 
 - 사용자가 화면의 측량 등고선을 맞다고 확인했다. 이 남북 방향을 되돌리지 않는다.

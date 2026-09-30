@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "model": "claude-opus-5-5",
+  "modelSettings": {
+    "claude-opus-5-5": { "effortLevel": "high" }
+  },
+  "language": "korean",
+  "cleanupPeriodDays": 90,
+
+  "env": {
+    "CLAUDE_CODE_ENABLE_TODO_TOOLS": "1",
+    "CLAUDE_CODE_GLOB_NO_IGNORE": "false",
+    "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP": "3",
+    "BASH_DEFAULT_TIMEOUT_MS": "600000",
+    "BASH_MAX_TIMEOUT_MS": "1800000"
+  },
+
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+    "allow": [
+      "Bash(cmake *)",
+      "Bash(ctest *)",
+      "Bash(clang-format *)",
+      "Bash(clang-tidy *)",
+      "PowerShell(cmake *)",
+      "PowerShell(ctest *)",
+      "PowerShell(clang-format *)",
+      "PowerShell(clang-tidy *)",
+      "WebFetch(domain:en.cppreference.com)",
+      "WebFetch(domain:cmake.org)",
+      "WebFetch(domain:clangd.llvm.org)",
+      "WebFetch(domain:code.claude.com)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(!**/.env.example)",
+      "Edit(**/.env)",
+      "Edit(**/.env.*)",
+      "Edit(!**/.env.example)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "PowerShell(git push --force*)",
+      "PowerShell(git push -f*)",
+      "PowerShell(git reset --hard*)"
+    ]
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["__HOOKS_DIR__/guard.mjs"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+
+  "statusLine": {
+    "type": "command",
+    "command": "node \"__HOOKS_DIR__/statusline.mjs\""
+  }
+}

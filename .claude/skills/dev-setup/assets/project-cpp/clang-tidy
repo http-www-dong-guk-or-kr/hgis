@@ -1,0 +1,31 @@
+# 정적 분석 — 노이즈보다 신호. 실제 버그(bugprone)와 성능(performance) 위주로 좁혀 잡는다.
+# 실행: clang-tidy -p build src/foo.cpp   (compile_commands.json 필요: CMAKE_EXPORT_COMPILE_COMMANDS=ON)
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  misc-*,
+  readability-misleading-indentation,
+  readability-redundant-control-flow,
+  readability-simplify-boolean-expr,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-emplace,
+  modernize-loop-convert,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -misc-non-private-member-variables-in-classes,
+  -misc-no-recursion,
+  -misc-include-cleaner,
+  -performance-avoid-endl,
+  -performance-enum-size,
+  -misc-const-correctness,
+  -misc-use-anonymous-namespace
+
+# 자체 코드의 헤더만 본다(외부 라이브러리 헤더의 경고는 우리가 고칠 수 없다).
+HeaderFilterRegex: '^.*[\\/](src|include)[\\/].*\.(h|hpp|hxx)$'
+
+# 기존 경고가 남아 있으면 파일 전체를 오류로 올리지 말고 변경한 줄만 본다.
+# WarningsAsErrors: 'bugprone-*,performance-*'
+
+FormatStyle: file

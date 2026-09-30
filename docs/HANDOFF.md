@@ -230,7 +230,7 @@
 
 ## 2026-09-20 완료 계약 skill·설계도
 
-- 조판·정합·주변유적 완료 동작은 `.agents/skills/ka-hgis-sheet/`와 `docs/architecture/ka-hgis-sheet-contracts.workflow.json`에 남긴다. 깨지면 그 계약을 먼저 본다.
+- 조판·정합·주변유적 완료 동작은 `.claude/skills/ka-hgis-sheet/`와 `docs/architecture/ka-hgis-sheet-contracts.workflow.json`에 남긴다. 깨지면 그 계약을 먼저 본다.
 - 커밋·푸시·포터블 없음.
 
 ## 2026-09-20 페이지 안 주변유적 전부 표시
@@ -656,7 +656,7 @@
 
 ## 2026-09-13 문화재인트라넷 스킬 작성 · 도면 범례 조사
 
-- 사용자 요청으로 프로젝트 로컬 .agents/skills/heritage-intranet/SKILL.md를 작성했다. 표시명은 문화재인트라넷, 호출 키는 heritage-intranet이다. AGENTS.md에 연결했다. 성공 해시/6종 완료 계약/보안·저장 경로/복원 시 과거 mtime으로 인한 재컴파일 누락을 기록했다.
+- 사용자 요청으로 프로젝트 로컬 heritage-intranet 스킬(당시 .agents/skills, 지금은 .claude/skills/heritage-intranet/SKILL.md)을 작성했다. 표시명은 문화재인트라넷, 호출 키는 heritage-intranet이다. AGENTS.md에 연결했다. 성공 해시/6종 완료 계약/보안·저장 경로/복원 시 과거 mtime으로 인한 재컴파일 누락을 기록했다.
 - quick_validate.py 통과, openai.yaml 표시명·설명 길이·참조 파일 확인 완료. 새 스킬 참조 success-state.md와 legend-state.md는 실제 확인과 미검증 부분을 구분한다.
 - 현재 범례는 설치 QGIS 4.3 commit 5073f6f11ec의 linkedMap 범위 필터에 이미 연결돼 있고 자체 extent 변경 갱신을 사용한다. 명백한 필터 누락을 발견하지 못했다. 긴 범례가 시군 전체라고 확정하지 않으며, 사용자 실제 도형 출력 검사는 하지 않았다.
 - 사용자의 다음 선택을 요청했다: 자료 종류 안 동일 유적명을 한 줄로 합칠지, 분류를 유지할지. 선택 전 중복 제거·여러 열·번호 생성은 구현하지 않았다. C++ 변경 없음. 다운로드 성공 파일은 유지했다.
@@ -853,12 +853,12 @@ MainWindow는 당시 AppData 저장 경로와 지정유산 한 종류 대상을 
 - 검증 상세와 전후 화소: build/qa/dem-continuous/REPORT.md 및 gallery.html. 완료 여부는 해당 보고서의 최종 실행 결과로 판단한다.
 
 
-> Updated: 2026-09-08. Codex-native C++/Qt/QGIS session. 현재 세션: [`.codex/NOW.md`](../.codex/NOW.md)
+> Updated: 2026-09-30. Claude Code(Opus 5.5) C++/Qt/QGIS 세션. 현재 세션: [`.codex/NOW.md`](../.codex/NOW.md) (폴더 이름만 낡은 현행 일지)
 
-**Agent rules:** [`AGENTS.md`](../AGENTS.md)  
+**Agent rules:** [`CLAUDE.md`](../CLAUDE.md) (→ [`AGENTS.md`](../AGENTS.md))  
 **This file + repo-root `HANDOFF.md`:** edit together.
 
-**HGIS 전용 Codex 스킬:** [ka-hgis-gis](../.agents/skills/ka-hgis-gis/SKILL.md). 전역 GPT-6/C++ 설정을 상속하고 이 저장소에서만 GIS 규칙을 추가한다. 과거 `.agents` 작업 기록과 구분한다.
+**HGIS 전용 Claude Code 스킬:** [ka-hgis-gis](../.claude/skills/ka-hgis-gis/SKILL.md). 전역 Claude 설정의 C++ 지침을 상속하고 이 저장소에서만 GIS 규칙을 추가한다. 옛 도구(Cursor·Codex·Grok)의 설정은 정리되었고 그 기록은 `.codex/NOW.md`와 `docs/archive/`에만 남아 있다.
 
 ---
 
@@ -1025,14 +1025,16 @@ This machine: OSGeo `D:\OSGeo4W` (dev-env also accepts C: / D:). CMake `C:\CMake
 
 ---
 
-## 5. Codex Native
+## 5. Claude Code Native
 
 | Surface | Path |
 | --- | --- |
-| Agent rules | `AGENTS.md` |
-| Session now | `.codex/NOW.md` |
+| Agent rules | `CLAUDE.md` (imports `AGENTS.md`) |
+| Claude Code settings | `.claude/settings.json`, `.claude/rules/`, `.claude/skills/`, `.claude/agents/`, `.claude/output-styles/`, `.claude/hooks/`, `.mcp.json` |
+| Owner guide / setting reference | `docs/claude-code-guide.md`, `docs/claude-code-settings.md` |
+| Session now | `.codex/NOW.md` (live log; folder name is legacy) |
 | Product SSOT | `HANDOFF.md` + `docs/HANDOFF.md` |
-| Build/search tools | native Codex tools, PowerShell, `rg`, CMake, ctest |
+| Build/search tools | Claude Code tools, PowerShell, `rg`, CMake, ctest, Graft MCP, clangd, Archify |
 | C++ language tooling | `.clangd`, `.clang-format`, `.clang-tidy`, `CMakePresets.json` when present |
-| Verification scripts | `scripts\dev-env.ps1`, `scripts\run-ka-hgis.ps1`, `scripts\publish-desktop.ps1`, `scripts\build-all.ps1` |
-| Legacy compatibility | `.grok`, `.cursor`, `.agents`, and `orca.yaml` may exist but are not required Codex presets |
+| Verification scripts | `scripts\ka-doctor.ps1`, `scripts\ka-build.ps1`, `scripts\ka-test.ps1`, `scripts\ka-smoke.ps1`, `scripts\dev-env.ps1`, `scripts\run-ka-hgis.ps1`, `scripts\build-all.ps1`; `publish-desktop.ps1` only on explicit request |
+| Legacy tools | `.cursor` and `.agents/skills` were removed/moved (2026-09-30). `.grok`, `.omo`, `orca.yaml` are history only |

@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "model": "claude-opus-5-5",
+  "modelSettings": {
+    "claude-opus-5-5": { "effortLevel": "high" }
+  },
+  "language": "korean",
+  "outputStyle": "ka-easy",
+
+  "env": {
+    "CLAUDE_CODE_ENABLE_TODO_TOOLS": "1",
+    "CLAUDE_CODE_GLOB_NO_IGNORE": "false",
+    "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP": "3",
+    "BASH_DEFAULT_TIMEOUT_MS": "600000",
+    "BASH_MAX_TIMEOUT_MS": "1800000"
+  },
+
+  "enabledMcpjsonServers": ["hgis_graft"],
+
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "disableBypassPermissionsMode": "disable",
+    "disableAutoMode": "disable",
+
+    "allow": [
+      "mcp__hgis_graft",
+
+      "PowerShell(.\\scripts\\ka-*.ps1 *)",
+      "PowerShell(./scripts/ka-*.ps1 *)",
+      "PowerShell(scripts\\ka-*.ps1 *)",
+      "PowerShell(scripts/ka-*.ps1 *)",
+      "PowerShell(powershell -NoProfile -File scripts\\ka-*.ps1 *)",
+      "PowerShell(powershell -NoProfile -File scripts/ka-*.ps1 *)",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\ka-*.ps1 *)",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ka-*.ps1 *)",
+      "Bash(powershell -NoProfile -File scripts/ka-*.ps1 *)",
+      "Bash(powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ka-*.ps1 *)",
+
+      "PowerShell(cmake *)",
+      "PowerShell(ctest *)",
+      "Bash(cmake *)",
+      "Bash(ctest *)",
+
+      "PowerShell(python .\\scripts\\clangd-definition.py *)",
+      "PowerShell(python ./scripts/clangd-definition.py *)",
+      "PowerShell(python scripts/clangd-definition.py *)",
+      "PowerShell(python scripts\\clangd-definition.py *)",
+      "PowerShell(py -3 scripts\\clangd-definition.py *)",
+      "Bash(python scripts/clangd-definition.py *)",
+      "Bash(python3 scripts/clangd-definition.py *)",
+      "PowerShell(py -3 scripts\\secret-scan.py)",
+      "PowerShell(py -3 scripts/secret-scan.py)",
+      "PowerShell(python scripts/secret-scan.py)",
+      "Bash(python scripts/secret-scan.py)",
+      "PowerShell(node .claude/hooks/test-hooks.mjs)",
+      "Bash(node .claude/hooks/test-hooks.mjs)",
+
+      "PowerShell(git add -- *)",
+      "Bash(git add -- *)",
+
+      "WebFetch(domain:docs.qgis.org)",
+      "WebFetch(domain:qgis.org)",
+      "WebFetch(domain:api.qgis.org)",
+      "WebFetch(domain:doc.qt.io)",
+      "WebFetch(domain:gdal.org)",
+      "WebFetch(domain:proj.org)",
+      "WebFetch(domain:cmake.org)",
+      "WebFetch(domain:en.cppreference.com)",
+      "WebFetch(domain:clangd.llvm.org)",
+      "WebFetch(domain:code.claude.com)"
+    ],
+
+    "ask": [
+      "PowerShell(git push *)",
+      "Bash(git push *)"
+    ],
+
+    "deny": [
+      "Read(config/*.ini)",
+      "Read(**/config/*.ini)",
+      "Read(!config/*.example.ini)",
+      "Read(**/secrets.ini)",
+      "Read(.env)",
+      "Read(**/.env)",
+      "Read(.env.*)",
+      "Read(**/.env.*)",
+      "Read(!.env.example)",
+      "Read(//**/AppData/Local/ka-hgis/**)",
+      "Read(//**/AppData/Local/CrashDumps/**)",
+      "Read(//**/.config/ka-hgis/**)",
+      "Read(//**/.cursor/mcp.json)",
+      "Read(//**/Desktop/HGIS-*/**)",
+      "Read(docs/architecture/*.html)",
+
+      "Edit(config/*.ini)",
+      "Edit(**/config/*.ini)",
+      "Edit(!config/*.example.ini)",
+      "Edit(**/secrets.ini)",
+      "Edit(.env)",
+      "Edit(**/.env)",
+      "Edit(.env.*)",
+      "Edit(**/.env.*)",
+      "Edit(!.env.example)",
+      "Edit(//**/AppData/Local/ka-hgis/**)",
+
+      "PowerShell(git push --force*)",
+      "PowerShell(git push -f*)",
+      "PowerShell(git reset --hard*)",
+      "PowerShell(git clean *)",
+      "PowerShell(git add -A*)",
+      "PowerShell(git add --all*)",
+      "PowerShell(git add .)",
+      "PowerShell(Stop-Process *ka-hgis*)",
+      "PowerShell(taskkill *ka-hgis*)",
+      "PowerShell(schtasks *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean *)",
+      "Bash(git add -A*)",
+      "Bash(git add --all*)",
+      "Bash(git add .)",
+      "Bash(pkill *ka-hgis*)",
+      "Bash(taskkill *ka-hgis*)"
+    ]
+  },
+
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/dev-loop.mjs", "session-start"],
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.mjs"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/dev-loop.mjs", "after-edit"],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/dev-loop.mjs", "after-shell"],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__hgis_graft__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/dev-loop.mjs", "after-mcp"],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "LSP",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/dev-loop.mjs", "after-lsp"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/dev-loop.mjs", "after-shell-fail"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/dev-loop.mjs", "stop"],
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+
+  "statusLine": {
+    "type": "command",
+    "command": "node .claude/hooks/statusline.mjs"
+  }
+}

@@ -8,8 +8,12 @@
 *.gpkg binary
 *.zip binary
 
-# Cloud agent scripts run on Ubuntu and must stay LF.
-.cursor/Dockerfile text eol=lf
-.cursor/cloud-install.sh text eol=lf
-.cursor/hooks/dev-loop.mjs text eol=lf
+# Windows 명령 파일은 CRLF 로 체크아웃한다(.bat/.cmd 는 LF 이면 라벨·goto 가 깨질 수 있다).
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.vbs text eol=crlf
+
+# Claude Code 훅·상태줄(Node)은 어느 OS 에서나 LF 로 둔다.
+.claude/hooks/*.mjs text eol=lf
+
 *.qgz binary

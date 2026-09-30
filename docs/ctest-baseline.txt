@@ -1,0 +1,21 @@
+# ctest 기준선 - "전부 통과"가 아니라 "새 실패 없음"이 통과 기준이다.
+# scripts\ka-test.ps1 이 이 목록과 비교해 새 실패만 실패로 센다.
+#
+# 형식: 한 줄에 ctest 이름 하나.
+#   이름        = 알려진 실패(이 변경과 무관하게 기존부터 실패). 목록에 있어도 사용자에게는 "알려진 실패"로 알린다.
+#   ~이름       = 병렬 실행 시간 제한 때문에 가끔 흔들리는 시험. 실패하면 한 번 다시 돌려 보고 통과하면 통과로 본다.
+# 목록을 바꾸는 것은 사용자의 결정이다(고쳐서 통과하게 되었거나 새로 알게 된 실패를 확정할 때).
+#
+# 근거(2026-09-27~09-29):
+#   - .codex/NOW.md 2026-09-27: CTest 68개 중 64 통과, 실패 4개 = perf_engine, storage_safety, cadastral, save_open_portable
+#     ("수정 전과 같은 함수·메시지")
+#   - 2026-09-29 커밋 본문: 전체 ctest 63/69, 실패 6개 = 기존 실패 4개 + 병렬 시간 흔들림 2개
+#   - docs/HANDOFF.md: 병렬 60초 한도로 heritage_style, save_open_saveas 등이 흔들림
+# 등록된 ctest 는 69개(CMakeLists.txt 의 ka_add_qtest 호출 기준).
+
+perf_engine
+storage_safety
+cadastral
+save_open_portable
+~heritage_style
+~save_open_saveas

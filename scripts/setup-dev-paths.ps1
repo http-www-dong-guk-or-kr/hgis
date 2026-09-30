@@ -1,11 +1,13 @@
-﻿# Point Graft at this checkout. Paths stay on this computer.
-# Versions stay in dev-env.lock.json. Does not install OSGeo4W, CMake, or Node.
+﻿# Check that this PC's Node matches dev-env.lock.json and that the Claude Code Graft wiring is in place.
+# Claude Code reads Graft from the committed .mcp.json (server hgis_graft), so nothing is written outside the repo now.
+# The old version of this script also wrote Codex (.codex/config.toml) and Cursor (~/.cursor/mcp.json) MCP files; that is gone.
+# To install everything (global settings, Graft, Archify, desktop icon) run scripts\setup-claude-dev.bat instead.
 #
 #   .\scripts\setup-dev-paths.ps1
 param()
 
 $ErrorActionPreference = "Stop"
-$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$Repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) { throw "node not found. Graft needs the Node major in dev-env.lock.json." }
 
@@ -25,63 +27,17 @@ if (Test-Path -LiteralPath $lockPath) {
   }
 }
 
-function ConvertTo-TomlLiteral([string]$value) {
-  return "'" + ($value.Replace("'", "''")) + "'"
+$mcpJson = Join-Path $Repo ".mcp.json"
+if (Test-Path -LiteralPath $mcpJson) {
+  Write-Host ("[같음] Claude Code Graft 연결: {0} (서버 hgis_graft)" -f $mcpJson) -ForegroundColor Green
+} else {
+  Write-Host ("[경고] .mcp.json 이 없다: {0}. git 에서 다시 받으세요." -f $mcpJson) -ForegroundColor Yellow
 }
 
-$tomlDir = Join-Path $Repo ".codex"
-New-Item -ItemType Directory -Force -Path $tomlDir | Out-Null
-$graftScript = Join-Path $Repo "scripts\graft-mcp.mjs"
-$toml = @"
-# This checkout's Graft MCP. Written by scripts/setup-dev-paths.ps1. Not committed.
-[mcp_servers.hgis_graft]
-command = $(ConvertTo-TomlLiteral $node.Source)
-args = [$(ConvertTo-TomlLiteral $graftScript)]
-cwd = $(ConvertTo-TomlLiteral $Repo)
-startup_timeout_sec = 30
-tool_timeout_sec = 120
-enabled_tools = ['graft_find_code', 'graft_file_api', 'graft_find_all', 'graft_check_freshness']
-
-[mcp_servers.hgis_graft.env]
-DO_NOT_TRACK = '1'
-CI = '1'
-"@
-$tomlPath = Join-Path $tomlDir "config.toml"
-[System.IO.File]::WriteAllText($tomlPath, $toml.Replace("`r`n", "`n").TrimEnd() + "`n", (New-Object System.Text.UTF8Encoding($false)))
-
-$cursorDir = Join-Path $env:USERPROFILE ".cursor"
-New-Item -ItemType Directory -Force -Path $cursorDir | Out-Null
-$mcpPath = Join-Path $cursorDir "mcp.json"
-$jsPath = Join-Path $env:TEMP "ka-hgis-setup-dev-paths.js"
-$js = @'
-const fs = require("fs");
-const repo = process.argv[2];
-const mcpPath = process.argv[3];
-const graftScript = process.argv[4];
-let mcp = { mcpServers: {} };
-if (fs.existsSync(mcpPath)) {
-  mcp = JSON.parse(fs.readFileSync(mcpPath, "utf8"));
+$graftTools = Join-Path $Repo "build\tooling\graft-source\dist\mcp\tools.js"
+if (Test-Path -LiteralPath $graftTools) {
+  Write-Host "[같음] Graft 엔진이 설치되어 있다." -ForegroundColor Green
+} else {
+  Write-Host "[안내] Graft 엔진이 아직 없다. .\scripts\setup-claude-dev.bat 을 실행하면 고정 판으로 설치한다." -ForegroundColor Yellow
 }
-if (!mcp.mcpServers || typeof mcp.mcpServers !== "object" || Array.isArray(mcp.mcpServers)) {
-  mcp.mcpServers = {};
-}
-mcp.mcpServers.hgis_graft = {
-  type: "stdio",
-  command: "node",
-  args: [graftScript],
-  cwd: repo,
-  env: { DO_NOT_TRACK: "1", CI: "1" }
-};
-fs.writeFileSync(mcpPath, JSON.stringify(mcp, null, 2) + "\n");
-'@
-[System.IO.File]::WriteAllText($jsPath, $js, (New-Object System.Text.UTF8Encoding($false)))
-try {
-  & node $jsPath $Repo $mcpPath $graftScript
-  if ($LASTEXITCODE -ne 0) { throw "Failed to write $mcpPath" }
-} finally {
-  Remove-Item -LiteralPath $jsPath -Force -ErrorAction SilentlyContinue
-}
-
 Write-Host ("Graft cwd: {0}" -f $Repo)
-Write-Host ("Cursor MCP: {0}" -f $mcpPath)
-Write-Host ("Codex config: {0}" -f $tomlPath)

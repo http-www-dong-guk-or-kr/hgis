@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "hgis_graft": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/scripts/graft-mcp.mjs"],
+      "env": {
+        "DO_NOT_TRACK": "1",
+        "CI": "1"
+      },
+      "timeout": 120000,
+      "alwaysLoad": true
+    }
+  }
+}

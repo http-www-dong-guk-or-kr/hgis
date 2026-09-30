@@ -4,24 +4,26 @@ Archify는 실제 소스에서 확인한 구조를 JSON으로 작성하고 독�
 
 ## 설치와 고정 버전
 
-- upstream: <https://github.com/tt-a1i/archify>
+- upstream: <https://github.com/tt-a1i/archify> (README가 Claude Code의 `.claude/skills/` 위치를 공식 지원한다)
 - revision: `a07fa1d5b2a10cbea110c5a2be2817397a301cdc`
 - package version: `2.17.0-dev.1` — 검증한 개발 커밋이며 안정판이라는 의미가 아니다.
-- 위치: `.agents/skills/archify/` (현재 저장소의 ignore 정책에 따라 로컬 설치)
+- 위치: `.claude/skills/archify/` (저장소에는 커밋하지 않는다. `.gitignore`에 있고 PC마다 설치한다)
 - 실행 조건: PATH의 Node.js >=18. CLI 사용에는 npm 설치가 필요 없다.
 
-Codex의 `skill-installer` helper로 설치한다. 저장소 루트에서 실행하며 `CODEX_HOME`이 설정되어 있으면 해당 경로의 helper를 사용한다.
+권장: `scripts\setup-claude-dev.bat`(또는 `scripts\setup-claude-dev.ps1`)이 아래 과정을 자동으로 한다. 이미 설치되어 있으면 건너뛴다.
+
+수동 설치(저장소 루트, PowerShell):
 
 ```powershell
-$installerRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
-$installer = Join-Path $installerRoot 'skills/.system/skill-installer/scripts/install-skill-from-github.py'
-python $installer --repo tt-a1i/archify --path archify `
-  --ref a07fa1d5b2a10cbea110c5a2be2817397a301cdc `
-  --dest (Join-Path (Get-Location).Path '.agents/skills')
+$rev = 'a07fa1d5b2a10cbea110c5a2be2817397a301cdc'
+git clone --no-checkout https://github.com/tt-a1i/archify build\tooling\archify-src
+git -C build\tooling\archify-src checkout --detach $rev
+git -C build\tooling\archify-src rev-parse HEAD        # 위 revision 과 같아야 한다
+Copy-Item -Recurse build\tooling\archify-src\archify .claude\skills\archify
 .\scripts\archify.ps1 doctor
 ```
 
-helper는 기존 설치를 덮어쓰지 않는다. 재설치가 필요하면 위 위치를 확인하고 기존 `archify` 폴더를 프로젝트의 `build/tooling/` 아래 별도 백업 경로로 옮긴 뒤 같은 고정 커밋을 설치한다. 무조건 최신 브랜치로 바꾸지 않는다. upstream `SKILL.md`, renderer, assets는 직접 수정하지 않는다. 설치된 스킬은 Codex의 다음 사용자 턴부터 사용할 수 있다.
+재설치가 필요하면 기존 `.claude\skills\archify` 폴더를 `build/tooling/` 아래 별도 백업 경로로 옮긴 뒤 같은 고정 커밋을 설치한다. 무조건 최신 브랜치로 바꾸지 않는다(`npx skills add`는 고정 리비전을 지원하지 않는 최신판을 받는다). upstream `SKILL.md`, renderer, assets는 직접 수정하지 않는다. 설치된 스킬은 Claude Code 를 다시 시작하면 `archify` 스킬로 보인다. 옛 위치 `.agents/skills/archify`에 설치본이 남아 있으면 `scripts/archify.ps1`이 그것도 인식하지만, 새로 설치할 때는 `.claude/skills/archify`를 쓴다.
 
 ## 사용
 
@@ -34,9 +36,9 @@ helper는 기존 설치를 덮어쓰지 않는다. 재설치가 필요하면 위
 .\scripts\archify.ps1 visual-check build/qa/my-map.html --json
 ```
 
-먼저 `.agents/skills/archify/SKILL.md`의 해당 스키마·작성·전달 절차를 따른다. `meta.quality_profile`은 `showcase`로 설정하고 소스 근거를 현재 커밋과 파일·줄에 연결한다. `validate`가 통과한 JSON으로 `deliver`를 실행한다. 전달 실패 시 기존 HTML은 이전 정상 결과일 수 있으므로 새 후보의 성공 근거로 사용하지 않는다. `visual-check`는 전달된 HTML의 브라우저 측정이며, 이미지에 대한 실제 육안 검토는 별도로 기록한다.
+먼저 `.claude/skills/archify/SKILL.md`의 해당 스키마·작성·전달 절차를 따른다. `meta.quality_profile`은 `showcase`로 설정하고 소스 근거를 현재 커밋과 파일·줄에 연결한다. `validate`가 통과한 JSON으로 `deliver`를 실행한다. 전달 실패 시 기존 HTML은 이전 정상 결과일 수 있으므로 새 후보의 성공 근거로 사용하지 않는다. `visual-check`는 전달된 HTML의 브라우저 측정이며, 이미지에 대한 실제 육안 검토는 별도로 기록한다.
 
-추적할 필요가 있는 구조 JSON은 목적에 맞는 `docs/architecture/` 위치에 둔다. 수시 검증 결과·스크린샷은 `build/qa/` 아래에 둔다. 현재 코드에 없는 계획 단계 컴포넌트는 구현된 것처럼 표시하지 않는다.
+추적할 필요가 있는 구조 JSON은 목적에 맞는 `docs/architecture/` 위치에 둔다. 수시 검증 결과·스크린샷은 `build/qa/` 아래에 둔다. 현재 코드에 없는 계획 단계 컴포넌트는 구현된 것처럼 표시하지 않는다. `docs/architecture/*.html`은 각 0.8MB 안팎이므로 에이전트가 열어 읽지 않는다(원천은 같은 이름의 `.json`).
 
 ## 확인한 제한
 
@@ -45,3 +47,4 @@ helper는 기존 설치를 덮어쓰지 않는다. 재설치가 필요하면 위
 - 이 버전의 Windows preview 테스트는 SIGTERM 종료 반환값 검사에서 실패했다. 검증된 기본 경로는 `validate` → `deliver` → `visual-check`다. preview의 정상 종료·정리는 보장하지 않는다.
 - `visual-check`에는 Chrome/Chromium이 필요하다. 실행 실패·생략을 성공으로 기록하지 않는다. 직접 확인하지 않은 전체 Viewer 기능까지 검증됐다고 표현하지 않는다.
 - 자동 C++ 코드 인덱싱이나 Graft 연동은 이 스킬의 설치로 생기지 않는다. 기존 AGENTS.md와 컴파일 DB·clangd·저장소 검증 절차를 따른다.
+- Archify 단계가 필수인지(모든 C++ 수정 vs 다중 모듈 변경만)는 사용자가 정한다. 현재는 AGENTS.md 그대로 "모든 제품 코드 변경"이다.

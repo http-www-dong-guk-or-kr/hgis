@@ -2,7 +2,7 @@
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $root
 . "$root\scripts\dev-env.ps1"
-$ev = Join-Path $root ".omo\evidence\ka-hgis-next"
+$ev = Join-Path $root "build\qa\e2e"
 New-Item -ItemType Directory -Force -Path $ev | Out-Null
 $log = Join-Path $ev "task-10-e2e.txt"
 function Log([string]$m) { Add-Content -LiteralPath $log -Value $m; Write-Host $m }

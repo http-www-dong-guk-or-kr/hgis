@@ -35,17 +35,23 @@ Desktop.ini
 .codegraph/
 .omo/
 .opencode/
-.agents/*
-!.agents/skills/
-.agents/skills/*
-!.agents/skills/ka-hgis-gis/
-!.agents/skills/heritage-intranet/
-!.agents/skills/ka-hgis-sheet/
-!.agents/skills/ka-hgis-verify/
-.claude/
+# .agents/ 는 옛 도구용 자리다. Claude Code 는 읽지 않는다(프로젝트 스킬은 .claude/skills/).
+# 옛 위치의 로컬 Archify 설치본(.agents/skills/archify)이 남아 있어도 커밋하지 않는다.
+# 새 설치본은 .claude/skills/archify/ (아래)이며 scripts/archify.ps1 이 그쪽을 먼저 쓴다.
+.agents/
+
+# Claude Code: 프로젝트 설정(.claude/settings.json, rules, skills, agents, hooks, output-styles)과
+# .mcp.json 은 저장소에서 공유한다. 개인 설정·임시 상태·작업 폴더만 제외한다.
+.claude/settings.local.json
+.claude/*.local.*
+.claude/hooks/state/
+.claude/worktrees/
+# Archify 는 고정 리비전을 PC마다 설치한다(scripts/setup-claude-dev.ps1). 저장소에는 넣지 않는다.
+.claude/skills/archify/
+CLAUDE.local.md
+
 .repowise/
-.mcp.json
-# Per-checkout Graft paths. scripts/setup-dev-paths.ps1 writes this file.
+# 옛 Codex 판 setup-dev-paths.ps1 이 쓰던 파일(지금은 쓰지 않음). 남아 있어도 커밋하지 않는다.
 .codex/config.toml
 .grok/.state/
 .cursor/.state/
@@ -126,6 +132,13 @@ venv/
 config/secrets.ini
 config/ngii-local.ini
 **/secrets.ini
+
+# 계정·키 파일은 이름이 달라도 커밋하지 않는다(평문 password= 가 들어갈 수 있다).
+# 예시 파일만 *.example.ini 로 추적한다.
+config/*.ini
+!config/*.example.ini
+.env.*
+!.env.example
 
 
 # QGIS offline manuals: large Desktop User Guide PDFs stay local (see docs/vendor/qgis-manual-3.44/README.md)

@@ -1,40 +1,40 @@
-# ka-hgis Cursor Agent Rules
+# ka-hgis 프로젝트 지침 (AGENTS.md)
 
 This repository is **ka-hgis**: a standalone C++20/Qt6 desktop HGIS for Korean archaeology field drawings. It links against OSGeo4W `qgis-dev` through `qgis_core` and `qgis_gui`. It is not a QGIS fork.
 
-Cursor reads this `AGENTS.md` as the workspace rule.
+Claude Code reads this file through the root `CLAUDE.md` (`@AGENTS.md`), which adds the Claude-specific operating rules. Other coding tools that follow the AGENTS.md convention can read it directly.
 
 Reply in the user's language, usually Korean. Code, paths, and identifiers may remain English; user-visible UI strings should follow existing Korean `QStringLiteral` patterns.
 
-## Cursor Runtime
+## Claude Code Runtime
 
-- Use Cursor native Agent, subagents (Task), MCP, hooks, and skills when they are available and useful.
-- The fixed model for this repository is Grok 4.7 in the Cursor model picker. Do not use Auto, Fast, or a different model unless the user switches it for that turn. https://cursor.com/docs/models
-- Legacy `.codex/`, `.grok`, and `.agents` dispatch/history files may remain for history or compatibility; they are not the authoritative harness. Current project skills remain `.agents/skills/ka-hgis-gis/`, [ka-hgis-sheet](.agents/skills/ka-hgis-sheet/SKILL.md), [Archify](.agents/skills/archify/SKILL.md), [문화재인트라넷](.agents/skills/heritage-intranet/SKILL.md), and [ka-hgis-verify](.agents/skills/ka-hgis-verify/SKILL.md).
-- Do not introduce OpenCode, Sisyphus, hidden auto-push, or hardcoded personal credentials.
-- Work directly for small and local changes. Use Cursor Task subagents only for bounded independent research, review, or verification when that improves correctness or throughput.
+- Use Claude Code's built-in Agent, subagents, MCP, hooks, skills and settings. Project configuration lives in `CLAUDE.md`, `.claude/` (settings, hooks, rules, skills, agents, output styles) and `.mcp.json`; user-level defaults live in `~/.claude/` and are installed by the `개발설정` skill (`/개발설정`) or `scripts/setup-claude-dev.ps1`. Owner guide: [claude-code-guide.md](docs/claude-code-guide.md). Setting reference: [claude-code-settings.md](docs/claude-code-settings.md).
+- The standard model for this repository is Claude Opus 5.5 (`claude-opus-5-5`), pinned in `.claude/settings.json` with effort `high`. The user changes the model or effort (`/model`, `/effort`); do not switch on your own.
+- `.codex/NOW.md` stays the live session log despite its folder name. Other legacy tool folders (`.grok`, `.omo`, `.opencode`, ...) are history only. Current project skills live in `.claude/skills/`: [ka-hgis-gis](.claude/skills/ka-hgis-gis/SKILL.md), [ka-hgis-sheet](.claude/skills/ka-hgis-sheet/SKILL.md), [문화재인트라넷](.claude/skills/heritage-intranet/SKILL.md), [ka-hgis-verify](.claude/skills/ka-hgis-verify/SKILL.md), and the locally installed Archify (`.claude/skills/archify/`, not committed).
+- Do not introduce configuration for other AI harnesses (Cursor, Codex, OpenCode, Sisyphus, Grok, ...), hidden auto-push, or hardcoded personal credentials.
+- Work directly for small and local changes. Use subagents only for bounded independent research, review, or verification when that improves correctness or throughput.
 - Commit only when the user explicitly asks.
 
 ### Verified developer tools
 
-- Product C++ edits under `src/` or `tests/` are not done until this session has run Graft (`hgis_graft`), `scripts/clangd-definition.py`, `scripts/archify.ps1`, and the matching `ctest`. `.cursor/hooks.json` `stop` sends that follow-up when the record is missing. Naming a tool is not evidence. Docs-only edits do not require the four.
-- Cloud agents run on Ubuntu from `.cursor/environment.json`. https://cursor.com/docs/cloud-agent/setup They do not have OSGeo4W, Visual Studio, or `qgis-dev`. Do not configure, build, ctest, or smoke there, and do not report those as passed. The Windows machine remains the build gate.
-- **Mandatory development workflow (user requirement, 2026-09-15; harness switched to Cursor 2026-09-18): `Cursor Agent + AGENTS.md + clangd + Graft + Archify + CMake/CTest`.** Use all six for product-code implementation and fixes, including small changes. Read the current repository instructions/state first; use Cursor Agent execution, Graft retrieval confirmed against source, clangd declaration/definition navigation and diagnostics, an Archify view of the affected behavior, and the required CMake/CTest checks. Record concrete inputs, artifacts and results in the task plan or QA report; naming a tool is not evidence of using it.
+- Product C++ edits under `src/` or `tests/` are not done until this session has run Graft (`hgis_graft`), `scripts/clangd-definition.py`, `scripts/archify.ps1`, and the matching `ctest`. The `Stop` hook in `.claude/settings.json` (`.claude/hooks/dev-loop.mjs`) sends that follow-up when the record is missing. Naming a tool is not evidence. Docs-only edits do not require the four.
+- Cloud and Linux sessions (Claude Code on the web sets `CLAUDE_CODE_REMOTE=true`) run on Ubuntu. They do not have OSGeo4W, Visual Studio, or `qgis-dev`. Do not configure, build, ctest, or smoke there, and do not report those as passed. The Windows machine remains the build gate.
+- **Mandatory development workflow (user requirement, 2026-09-15; harness switched to Cursor 2026-09-18 and to Claude Code 2026-09-29 at the user's request): `Claude Code + CLAUDE.md + clangd + Graft + Archify + CMake/CTest`.** Use all six for product-code implementation and fixes, including small changes. Read the current repository instructions/state first; use Claude Code execution, Graft retrieval confirmed against source, clangd declaration/definition navigation and diagnostics, an Archify view of the affected behavior, and the required CMake/CTest checks. Record concrete inputs, artifacts and results in the task plan or QA report; naming a tool is not evidence of using it.
 - Setup and evidence: [developer-tools.md](docs/developer-tools.md). Keep the existing source, compiler and tests authoritative.
 - For C++ changes, use the real `build/compile_commands.json`; regenerate with `scripts/gen-compile-commands.ps1` after CMake/SDK changes. Use [clangd navigation](docs/clangd-navigation.md) for a concrete call location's declaration/definition and clangd checks for compiler diagnostics.
-- For each product-code task, use project MCP `hgis_graft` to narrow candidate files or definitions; a focused file API query is sufficient for a small known-file edit. Graft is exposed to Cursor via the USER-level MCP config (`%USERPROFILE%\.cursor\mcp.json`, server `hgis_graft`), not a repo-level `.cursor/mcp.json`. Codex registration in `.codex/config.toml` remains for compatibility. Its four tools cover `src/` and `tests/` and refresh the local structural index before retrieval. Confirm parser spans/signatures in source; use `rg` for full text coverage and Qt signal/slot wiring.
+- For each product-code task, use project MCP `hgis_graft` to narrow candidate files or definitions; a focused file API query is sufficient for a small known-file edit. Graft is exposed to Claude Code through the project `.mcp.json` (server `hgis_graft`, started with `node scripts/graft-mcp.mjs`); install the engine with `scripts/setup-claude-dev.ps1` (or `scripts/setup-graft.ps1`). Its four tools cover `src/` and `tests/` and refresh the local structural index before retrieval. Confirm parser spans/signatures in source; use `rg` for full text coverage and Qt signal/slot wiring.
 - Do not enable Graft call tracing or claim complete impact coverage: HGIS C++ cross-file edges remain incomplete even with Windows LSP discovery repaired. Do not run upstream `graft init`, install its hooks, or use graph-first instructions over these rules. The pinned adapter omits updater, model-backed indexing and promotional output.
-- For each product-code task, use the installed project [Archify skill](.agents/skills/archify/SKILL.md) via `scripts/archify.ps1` to inspect the affected structure or flow; see [setup](docs/archify-setup.md). Keep the diagram scoped to the change. Reuse an existing diagram only after checking its evidence against current source; update it when needed and run validate/deliver/visual-check. Cite current source for every relationship and distinguish planned components. Also use this workflow for architecture explanations and multi-module refactor reviews. A diagram's validation does not validate C++ semantics.
+- For each product-code task, use the installed project Archify skill (`.claude/skills/archify/`, installed locally by `scripts/setup-claude-dev.ps1`) via `scripts/archify.ps1` to inspect the affected structure or flow; see [setup](docs/archify-setup.md). Keep the diagram scoped to the change. Reuse an existing diagram only after checking its evidence against current source; update it when needed and run validate/deliver/visual-check. Cite current source for every relationship and distinguish planned components. Also use this workflow for architecture explanations and multi-module refactor reviews. A diagram's validation does not validate C++ semantics.
 - If a required tool is unavailable, attempt the documented setup/recovery without changing pinned revisions. Source-based investigation may continue, but explicitly record the missing required check and report verification as incomplete; never silently omit the tool or invent its results. The existing documentation-only verification rule below still applies to changes that do not alter product code or C++ build behavior.
 
 ## SSOT
 
 ### Project-local GIS specialization
 
-- Cursor user rules and global settings supply general C++ guidance. GIS rules belong only to this repository; do not copy them to global user rules or global skills.
-- Use [ka-hgis-gis](.agents/skills/ka-hgis-gis/SKILL.md) for HGIS implementation, diagnosis and review. It routes to relevant evidence and tests without requiring a GIS investigation for an unrelated edit.
-- Use [문화재인트라넷](.agents/skills/heritage-intranet/SKILL.md) for nearby-heritage intranet downloads, related legends and recovery; it records the confirmed success contract and the stale-object-file restore failure.
-- Use [ka-hgis-sheet](.agents/skills/ka-hgis-sheet/SKILL.md) when a completed sheet/snap/heritage-number behavior regresses, or when a newly finished field contract must be recorded. Design map: [ka-hgis-sheet-contracts.workflow.json](docs/architecture/ka-hgis-sheet-contracts.workflow.json).
+- User-level Claude Code settings (`~/.claude/`) supply general C++ guidance. GIS rules belong only to this repository; do not copy them to global user rules or global skills.
+- Use [ka-hgis-gis](.claude/skills/ka-hgis-gis/SKILL.md) for HGIS implementation, diagnosis and review. It routes to relevant evidence and tests without requiring a GIS investigation for an unrelated edit.
+- Use [문화재인트라넷](.claude/skills/heritage-intranet/SKILL.md) for nearby-heritage intranet downloads, related legends and recovery; it records the confirmed success contract and the stale-object-file restore failure.
+- Use [ka-hgis-sheet](.claude/skills/ka-hgis-sheet/SKILL.md) when a completed sheet/snap/heritage-number behavior regresses, or when a newly finished field contract must be recorded. Design map: [ka-hgis-sheet-contracts.workflow.json](docs/architecture/ka-hgis-sheet-contracts.workflow.json).
 - Resolve historical documentation against current user requirements, `.codex/NOW.md`, current handoffs and actual code. The original ADR's C++17/LTR baseline and the schema's legacy 5179 default do not override the current C++20/Qt6/qgis-dev build or selected survey CRS.
 - Use the repo PowerShell environment and installed OSGeo4W SDK. Do not replace this application's Qt/QGIS build, runtime plugins or package layout with the global standalone C++ template.
 
@@ -44,8 +44,10 @@ Read these before non-trivial product or GIS work:
 2. `docs/HANDOFF.md` - product truth (canonical). Root `HANDOFF.md` is a short pointer only.
 3. `docs/adr/0001-standalone-cpp-qgis-libs.md` - Architecture B, no QGIS fork.
 4. `docs/domain/data-model.md` - GPKG layers and fields.
-5. `docs/architecture/data-flow.md` - critical path.
+5. `docs/architecture/data-flow.md` - historical sprint overview (reference only; this file and the source win).
 6. `docs/vendor/qgis-manual-3.44/` - local QGIS manual/cookbook evidence for map, layer, edit-buffer, and layout behavior.
+
+Do not read the big files whole: read only the top ~40 lines of `.codex/NOW.md` and the top ~60 lines of `docs/HANDOFF.md`, then `grep -n '^## '` and open the section you need. Never open `docs/architecture/*.html` (about 0.8 MB each).
 
 Use official online documentation only when local repo evidence is missing or version-specific behavior matters.
 
@@ -60,7 +62,7 @@ Use official online documentation only when local repo evidence is missing or ve
 ## Product Invariants
 
 - Architecture B only: link `qgis_core` / `qgis_gui`; do not fork QGIS; do not reimplement PROJ, GDAL, QGIS rendering, or CRS transformation.
-- Domain layer logic keys are `survey_area`, `feature_poly`, `feature_line`, `section_line`, `control_points`, and existing `artifact_point` where already supported.
+- Domain layer logic keys are `survey_area`, `feature_poly`, `feature_line`, `section_line`, `control_points`, `trial_trench`, and existing `artifact_point` where already supported.
 - Store logical domain identity in `ka_hgis/layer_key`; Korean titles are UI labels only.
 - Keep legend groups separated as **조사 데이터** and **참조 지도**. Downloaded cadastral (**지적도 · 조사 주변 5km**) stays at the layer-tree root, outside **참조 지도**, not merged into a **지적도** group and not merged with the VWorld picture. VWorld cadastral picture layers (**지적 본번/부번**, VWorld 지적) stay at the layer-tree root, outside the **참조 지도** group. Basemaps, WMS, XYZ, soil, geology, masks, and aligned rasters are reference maps, not survey data. VWorld cadastral WMS is a picture and cannot snap.
 - Work CRS may be EPSG:5186 or EPSG:5187. Upload/export output is EPSG:5179 SHP + PDF + MANIFEST.
@@ -172,5 +174,5 @@ Do not ask the user to diagnose EPSG, WMS, QGIS provider, or CRS behavior.
 - Reintroducing automatic startup restore.
 - Hardcoding VWorld keys.
 - Adding DXF as primary submit output.
-- Reintroducing Codex, Antigravity, OpenCode, Sisyphus, or a second harness. Cursor with Grok 4.7 is the harness.
+- Reintroducing configuration for other AI harnesses (Cursor, Codex, Antigravity, OpenCode, Sisyphus, Grok) or a second harness. Claude Code (Opus 5.5) is the harness.
 - Forcing large agent graphs for local one-file fixes.

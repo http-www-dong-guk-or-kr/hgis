@@ -1,0 +1,10 @@
+# clangd 설정 — build/compile_commands.json 을 쓴다(CMake: -DCMAKE_EXPORT_COMPILE_COMMANDS=ON).
+CompileFlags:
+  CompilationDatabase: build
+
+Index:
+  Background: Build
+
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
