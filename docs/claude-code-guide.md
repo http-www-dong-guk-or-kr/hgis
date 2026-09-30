@@ -14,7 +14,7 @@
 Claude Code 의 **전역 설정**(내 PC의 `C:\Users\내이름\.claude`)은 프로젝트와 무관한 범용 C++ 개발설정입니다. 클라우드 세션에서는 내 PC의 이 폴더를 바꿀 수 없어서, 내 PC에서 한 번 실행하는 설치 파일을 따로 둡니다.
 
 - **ZIP 로 받았을 때**: 압축을 풀고 `INSTALL-GLOBAL.bat` 더블클릭 → 끝나면 Claude Code 를 다시 실행. 먼저 미리보기만 보려면 `CHECK-ONLY.bat`. 자세한 안내는 ZIP 안의 `README-ko.txt`.
-  - ZIP 은 이 저장소의 `docs/downloads/claude-dev-global-setup.zip` 에 있습니다(GitHub 에서 파일을 열고 오른쪽 위 다운로드 아이콘). 바로 받기: https://github.com/kwonyoungin11/hgis/raw/claude/wonderful-sagan-jpzo7l/docs/downloads/claude-dev-global-setup.zip
+  - ZIP 은 이 저장소의 `docs/downloads/claude-dev-global-setup.zip` 에 있습니다. 이 저장소는 **비공개**라서 GitHub 에 로그인한 브라우저에서만 열립니다. 파일 페이지: https://github.com/kwonyoungin11/hgis/blob/claude/wonderful-sagan-jpzo7l/docs/downloads/claude-dev-global-setup.zip (열린 뒤 오른쪽 위 다운로드 아이콘 또는 "Download raw file").
   - 원본을 고친 뒤 ZIP 을 다시 만들려면 `python3 .claude/skills/dev-setup/bundle/make-zip.py` (시험이 ZIP 과 원본이 같은지 검사합니다).
 - **저장소를 받은 PC**: `.claude\skills\dev-setup\bundle\INSTALL-GLOBAL.bat` 을 더블클릭하면 같은 일을 합니다.
 - Node.js 18 이상이 필요합니다(없으면 설치할지 물어봅니다). 이미 내 설정이 있으면 내 값은 그대로 두고 없는 것만 추가하며, 바꾸는 파일은 `.bak-날짜` 백업을 남깁니다.
