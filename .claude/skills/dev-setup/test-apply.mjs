@@ -394,6 +394,20 @@ const runJson = (argv, env) => {
   ok(broken.status === 0 && broken.stdout.trim() === "", "깨진 입력은 조용히 통과(fail-open)");
 }
 
+// ------------------------------------------------------------------ 저장소 안의 ZIP 이 원본과 같은가(python3 가 있을 때만)
+{
+  const maker = path.join(here, "bundle", "make-zip.py");
+  const zipPath = path.resolve(here, "..", "..", "..", "docs", "downloads", "claude-dev-global-setup.zip");
+  const py = ["python3", "python"].find((c) => spawnSync(c, ["--version"], { encoding: "utf8" }).status === 0);
+  if (py && fs.existsSync(maker)) {
+    const r = spawnSync(py, [maker, "--check"], { encoding: "utf8", timeout: 60000 });
+    ok(r.status === 0, "docs/downloads/claude-dev-global-setup.zip 이 원본과 같음(다르면 python3 .claude/skills/dev-setup/bundle/make-zip.py)", (r.stdout || "") + (r.stderr || ""));
+  } else {
+    console.log("(python 이 없어 ZIP 동기 검사는 건너뜀)");
+  }
+  void zipPath;
+}
+
 console.log(`개발설정 설치기 시험: 통과 ${pass} · 실패 ${fail}`);
 if (fail) {
   for (const f of failures) console.log("  ✗ " + f);
