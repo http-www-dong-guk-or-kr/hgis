@@ -112,6 +112,8 @@ function isProductCpp(filePath) {
   const p = toPosix(filePath);
   const rel = relativeToRoot(p);
   if (rel !== null) return /^(src|tests)\/.+\.(cpp|cxx|cc|h|hpp)$/i.test(rel);
+  // 임시 폴더·작업용 폴더의 파일(예: 하위 작업이 시험용으로 만든 가짜 프로젝트)은 저장소 파일이 아니다.
+  if (/^(\/tmp\/|\/var\/(tmp|folders)\/|[a-z]:\/windows\/temp\/)|\/appdata\/local\/temp\/|\/scratchpad\//i.test(p)) return false;
   // 프로젝트 루트를 알 수 없는 절대경로(예: 다른 PC 경로 형식)는 경로 조각으로 판정
   return CPP_UNDER_SRC_TESTS.test(p);
 }
@@ -142,32 +144,106 @@ function readBranch() {
 }
 
 // ---------------------------------------------------------------- 증거 판별
-const WRAPPER_CTEST = /ka-test(-all)?\.ps1|ka-check\.ps1|verify-release\.ps1|ctest-flake\.ps1|build-all\.ps1/i;
-const DIRECT_CTEST = /(^|[^a-z0-9_-])ctest(\.exe)?(?![a-z0-9_-])/i;
 const CTEST_LIST_ONLY = /ctest[^\n]*\s(-n|--show-only(=\w+)?|--version|-h|--help)(\s|$)/i;
 
-function classify(command) {
-  const c = toPosix(command);
-  const ev = [];
-  if (/clangd-definition\.py/i.test(c)) ev.push("clangd");
-  if (/archify\.ps1['"\s]+(validate|deliver|visual-check|preview)\b/i.test(c)) ev.push("archify");
-  if (WRAPPER_CTEST.test(c) || (DIRECT_CTEST.test(c) && !CTEST_LIST_ONLY.test(c))) ev.push("ctest");
-  if (/graft-mcp\.mjs|graft_find_|graft_file_api|graft_check_freshness/i.test(c)) ev.push("graft");
-  if (/--smoke-quit|ka-smoke\.ps1/i.test(c)) ev.push("smoke");
-  return ev;
+// 명령을 ; && || | 줄바꿈 "밖에서만" 자른 조각으로 나눈다(따옴표 안의 글자는 쪼개지 않는다).
+// 조각마다 따로 판정해야 "다른 조각의 글자"가 증거·수정으로 잘못 세어지지 않는다.
+function splitSegments(command) {
+  const s = String(command ?? "");
+  const out = [];
+  let cur = "";
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    const two = s.slice(i, i + 2);
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < s.length && s[j] !== ch) {
+        if (ch === '"' && (s[j] === "\\" || s[j] === "`") && s[j + 1] === '"') j++; // \" 또는 `" 만 이스케이프로 본다(Windows 경로의 \ 는 그대로)
+        j++;
+      }
+      cur += s.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+    if (ch === "\n" || ch === ";" || ch === "|") {
+      out.push(cur);
+      cur = "";
+      i++;
+      continue;
+    }
+    if (two === "&&" || two === "||") {
+      out.push(cur);
+      cur = "";
+      i += 2;
+      continue;
+    }
+    cur += ch;
+    i++;
+  }
+  out.push(cur);
+  return out.map((t) => t.trim()).filter(Boolean);
 }
 
-// 셸로 C++ 를 고친 경우(sed -i, Set-Content, cp, git checkout/restore, 리다이렉트 …)
-const WRITE_VERB =
-  /(^|[^\w-])(sed\s+-i|set-content|add-content|out-file|copy-item|cpi|move-item|tee|cp|mv|xcopy|robocopy|git\s+(apply|checkout|restore))(?![\w-])/i;
+// 검증 도구는 조각이 그 도구로 "시작"할 때만 증거다.
+//   (rg ctest docs, Get-Content scripts/clangd-definition.py, git commit -m "Tested: ctest …" 같은 글자는 증거가 아니다.)
+// 앞에 붙을 수 있는 것: & · powershell/pwsh … -File · python/py -3 · node · ./
+const RUN_HEAD = String.raw`^(?:&\s*)?(?:(?:powershell|pwsh)(?:\.exe)?\b[^|;&]*?\s-File\s+|(?:python3?|py)(?:\s+-3)?\s+|node\s+)?["']?(?:\./)?`;
+const EVIDENCE = {
+  clangd: new RegExp(RUN_HEAD + String.raw`scripts/clangd-definition\.py\b`, "i"),
+  archify: new RegExp(RUN_HEAD + String.raw`scripts/archify\.ps1["']?\s+(?:validate|deliver|visual-check|preview)\b`, "i"),
+  ctestWrapper: new RegExp(RUN_HEAD + String.raw`scripts/(?:ka-test(?:-all)?|ka-check|verify-release|ctest-flake|build-all)\.ps1\b`, "i"),
+  ctestDirect: /^(?:&\s*)?["']?(?:[^\s"']*\/)?ctest(?:\.exe)?["']?(?=\s|$)/i,
+  graft: new RegExp(RUN_HEAD + String.raw`scripts/graft-mcp\.mjs\b`, "i"),
+  smoke: new RegExp(RUN_HEAD + String.raw`scripts/ka-smoke\.ps1\b|^(?:&\s*)?["']?(?:[^\s"']*\/)?(?:run-ka-hgis\.ps1|ka-hgis(?:\.exe)?)["']?\s+[^|;&]*--smoke-quit`, "i"),
+};
+
+function classify(command) {
+  const ev = new Set();
+  for (const seg of splitSegments(toPosix(command))) {
+    if (EVIDENCE.clangd.test(seg)) ev.add("clangd");
+    if (EVIDENCE.archify.test(seg)) ev.add("archify");
+    if (EVIDENCE.ctestWrapper.test(seg) || (EVIDENCE.ctestDirect.test(seg) && !CTEST_LIST_ONLY.test(seg))) ev.add("ctest");
+    if (EVIDENCE.graft.test(seg)) ev.add("graft");
+    if (EVIDENCE.smoke.test(seg)) ev.add("smoke");
+  }
+  return [...ev];
+}
+
+// 셸로 C++ 를 고친 경우(sed -i, Set-Content, tee, cp/mv 의 도착 파일, git checkout/restore, 리다이렉트 …)
+//   - 쓰기 동사와 파일 경로가 "같은 조각"에 있어야 한다(다른 조각의 rg/Select-String 은 읽기일 뿐이다).
+//   - 경로는 저장소 안이어야 한다: src/·tests/ 로 시작하는 상대경로, 또는 저장소 루트 아래 절대경로.
+//     $변수·임시 폴더·다른 폴더의 …/src/x.cpp 는 저장소 파일로 보지 않는다.
+const WRITE_HEAD = /^(?:&\s*)?(?:sed\s+-i|set-content|add-content|out-file|tee|git\s+(?:apply|checkout|restore))\b/i;
+const COPY_HEAD = /^(?:&\s*)?(?:cp|mv|copy-item|cpi|move-item|xcopy|robocopy|copy|move)\b/i;
+const CPP_FILE = /\.(?:cpp|cxx|cc|h|hpp)$/i;
+
+function repoCppToken(tok) {
+  const t = tok.replace(/^\d*>{1,2}/, "").replace(/^\.\//, "");
+  if (!t || !CPP_FILE.test(t) || /[$%*?]/.test(t)) return null;
+  if (/^(?:src|tests)\//i.test(t)) return t;
+  if (/^(?:\/|[a-z]:\/)/i.test(t)) {
+    const rel = relativeToRoot(t);
+    if (rel !== null && /^(?:src|tests)\//i.test(rel)) return t;
+  }
+  return null;
+}
+
 function shellCppEdits(command) {
-  const c = toPosix(command).replace(/["'`]/g, "");
   const found = [];
-  const re = /((?:[\w.:~-]+\/)*(?:src|tests)\/[^\s|;&<>]+\.(?:cpp|cxx|cc|h|hpp))\b/gi;
-  let m;
-  while ((m = re.exec(c))) {
-    const before = c.slice(Math.max(0, m.index - 6), m.index);
-    if (WRITE_VERB.test(c) || />>?\s*$/.test(before)) found.push(m[1]);
+  for (const seg of splitSegments(toPosix(command))) {
+    const toks = seg.replace(/["'`]/g, "").split(/\s+/).filter(Boolean);
+    const cands = toks.map((tok, idx) => ({ idx, path: repoCppToken(tok) })).filter((x) => x.path);
+    if (!cands.length) continue;
+    const redirTarget = (idx) => /^\d*>{1,2}$/.test(toks[idx - 1] ?? "") || /^\d*>{1,2}/.test(toks[idx]);
+    const text = toks.join(" ");
+    if (WRITE_HEAD.test(text)) {
+      for (const c of cands) found.push(c.path);
+    } else if (COPY_HEAD.test(text)) {
+      const lastArg = [...toks.keys()].reverse().find((i) => i > 0 && !/^-/.test(toks[i]));
+      for (const c of cands) if (c.idx === lastArg) found.push(c.path); // 복사·이동은 도착 파일만
+    }
+    for (const c of cands) if (redirTarget(c.idx) && !found.includes(c.path)) found.push(c.path);
   }
   return found;
 }

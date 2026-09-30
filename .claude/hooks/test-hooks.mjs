@@ -380,6 +380,130 @@ const stopOut = (r) => r.json?.decision === "block" ? "block" : r.json?.hookSpec
   fs.rmSync(root, { recursive: true, force: true });
 }
 
+// ------------------------------------------------------------------ dev-loop: 셸 수정 판정·증거 판정 정확도
+{
+  const stateOf = (root) => path.join(root, ".claude", "hooks", "state", SID);
+  const pendingOf = (root) => {
+    try {
+      return fs.readFileSync(path.join(stateOf(root), "pending.txt"), "utf8").split(/\r?\n/).filter(Boolean);
+    } catch {
+      return [];
+    }
+  };
+  const marksOf = (root) => {
+    try {
+      return fs.readdirSync(stateOf(root)).filter((n) => ["ctest", "clangd", "archify", "graft", "smoke"].includes(n)).sort();
+    } catch {
+      return [];
+    }
+  };
+  const shell = (root, command, tool = "PowerShell") => ev(root, "after-shell", { hook_event_name: "PostToolUse", tool_name: tool, tool_input: { command } });
+  const fresh = () => {
+    const root = tmpProject();
+    provisionWindowsTools(root, { graft: 1, compdb: 1, archify: 1, cmake: 1 });
+    ev(root, "session-start", { hook_event_name: "SessionStart", source: "startup" });
+    return root;
+  };
+
+  // (A) 진짜 수정은 기록한다
+  const edits = [
+    ["sed -i s/a/b/ src/core/A.cpp", "src/core/A.cpp"],
+    ["Set-Content -Path src/core/B.cpp -Value x", "src/core/B.cpp"],
+    ["echo x > tests/t_x.cpp", "tests/t_x.cpp"],
+    ["cp /tmp/new.cpp src/core/C.cpp", "src/core/C.cpp"],
+    ["git checkout -- src/core/D.cpp", "src/core/D.cpp"],
+    ["Get-Content /tmp/p.txt | Set-Content src/core/F.cpp", "src/core/F.cpp"],
+  ];
+  for (const [cmd, want] of edits) {
+    const root = fresh();
+    shell(root, cmd);
+    ok(pendingOf(root).includes(want), `셸 수정 기록: ${cmd}`, JSON.stringify(pendingOf(root)));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  {
+    const root = fresh();
+    shell(root, `tee ${toPosixPath(path.join(root, "src", "core", "E.cpp"))}`);
+    ok(pendingOf(root).some((p) => /src\/core\/E\.cpp$/.test(p)), "셸 수정 기록: 저장소 루트 아래 절대경로", JSON.stringify(pendingOf(root)));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+
+  // (B) 읽기·다른 폴더·다른 조각의 글자는 수정으로 세지 않는다(검증 게이트 오탐 방지)
+  const notEdits = [
+    "ctest --test-dir build | tee build/qa/ctest.log; Select-String FAIL tests/test_theme.cpp",
+    "git checkout -b x; rg foo src/core/a.cpp",
+    "cp a b; git diff -- src/core/a.cpp",
+    "mkdir -p $T/src; printf x > $T/src/main.cpp",
+    "cp src/core/A.cpp /tmp/backup.cpp",
+    "sed -i s/a/b/ /tmp/xyz/src/main.cpp",
+    "cat src/core/A.cpp > /tmp/out.txt",
+    "Get-Content src/core/A.cpp | Set-Content notes.txt",
+    "rg -n foo src/core/A.cpp",
+    "git diff -- src/core/A.cpp tests/t.cpp",
+    'git commit -m "sed -i on src/core/A.cpp"',
+    "T=$(mktemp -d); mkdir -p $T/src && echo x > $T/src/main.cpp",
+  ];
+  for (const cmd of notEdits) {
+    const root = fresh();
+    shell(root, cmd, "Bash");
+    ok(pendingOf(root).length === 0, `셸 수정으로 세지 않음: ${cmd}`, JSON.stringify(pendingOf(root)));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  {
+    // 임시 폴더의 파일을 Edit/Write 도구로 만들어도 저장소 수정이 아니다
+    const root = fresh();
+    ev(root, "after-edit", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: "/tmp/claude-0/x/scratchpad/v2/src/main.cpp" } });
+    ok(pendingOf(root).length === 0, "임시·작업 폴더의 src/main.cpp 는 수정으로 세지 않음", JSON.stringify(pendingOf(root)));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+
+  // (C) 검증 도구로 "시작"하는 명령만 증거다
+  const notEvidence = [
+    "Select-String -Pattern ctest docs/HANDOFF.md",
+    "Get-Content scripts/clangd-definition.py",
+    "rg graft_find_ docs",
+    'git commit -m "Tested: ctest ...; archify.ps1 validate"',
+    "Write-Host ctest",
+    "echo scripts/archify.ps1 validate architecture x.json",
+    "cat scripts/ka-test.ps1",
+    "type scripts\\archify.ps1 validate",
+    "git log --grep ctest",
+  ];
+  for (const cmd of notEvidence) {
+    const root = fresh();
+    shell(root, cmd);
+    ok(marksOf(root).length === 0, `증거로 인정하지 않음: ${cmd}`, JSON.stringify(marksOf(root)));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  const evidence = [
+    ["python scripts/clangd-definition.py src/core/A.cpp 1 1", "clangd"],
+    ["py -3 scripts\\clangd-definition.py src/core/A.cpp 1 1", "clangd"],
+    ["& .\\scripts\\archify.ps1 validate architecture a.json", "archify"],
+    ["powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\archify.ps1 deliver architecture a.json b.html", "archify"],
+    ["ctest --test-dir build -C Release -R foo", "ctest"],
+    [". .\\scripts\\dev-env.ps1; ctest --test-dir build -C Release", "ctest"],
+    ["& .\\scripts\\ka-test.ps1 -Area save", "ctest"],
+    ["pwsh -NoProfile -File scripts\\ka-test.ps1 -All", "ctest"],
+    ["powershell -NoProfile -File scripts/ka-smoke.ps1", "smoke"],
+    [".\\scripts\\run-ka-hgis.ps1 --smoke-quit", "smoke"],
+    ["build\\Release\\ka-hgis.exe --smoke-quit", "smoke"],
+  ];
+  for (const [cmd, want] of evidence) {
+    const root = fresh();
+    shell(root, cmd);
+    ok(marksOf(root).includes(want), `증거로 인정: ${cmd}`, JSON.stringify(marksOf(root)));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  {
+    const root = fresh();
+    shell(root, "ctest --test-dir build -N");
+    ok(!marksOf(root).includes("ctest"), "ctest -N(목록만)은 증거가 아님");
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+function toPosixPath(p) {
+  return String(p).replace(/\\/g, "/");
+}
+
 // ------------------------------------------------------------------ statusline.mjs
 if (fs.existsSync(statusline)) {
   const root = tmpProject();
