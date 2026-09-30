@@ -1,17 +1,19 @@
 #!/usr/bin/env node
-// PreToolUse 안전 검사 — Bash | PowerShell | Read | Grep | Glob
+// 전역 안전 검사(범용) — PreToolUse: Bash | PowerShell
+//
+// 어느 C++ 프로젝트에서나 쓰는 "두 번째 방어선"이다. 특정 프로젝트(GIS 등)의 규칙은 넣지 않는다.
+// 프로젝트 전용 규칙은 그 프로젝트의 .claude/hooks/ 안에 따로 둔다(전역 훅과 함께 둘 다 실행된다).
 //
 // 왜 필요한가
-//   - Windows 에는 Claude Code 의 OS 샌드박스가 없다. 그래서 위험한 명령·비밀 파일 접근을
-//     도구 실행 직전에 한 번 더 걸러 준다. 비개발자가 승인 창의 영어 명령을 읽고 판단하는 일을 줄이는 것이 목적이다.
-//   - permissions.deny 와 같은 방향의 "두 번째 방어선"이다. 보안 경계는 아니다(우회하려는 악의적 명령은 못 막는다).
+//   - Windows 에는 Claude Code 의 OS 샌드박스가 없다. 그래서 되돌릴 수 없는 명령을 도구 실행 직전에 한 번 더 걸러 준다.
+//   - permissions.deny 와 같은 방향이며 보안 경계는 아니다(우회하려는 악의적 명령은 못 막는다).
 //
 // 동작
 //   - stdin 으로 훅 JSON 을 받는다. 위험하면 hookSpecificOutput.permissionDecision 을 deny 또는 ask 로 낸다.
-//   - deny 사유는 Claude 에게 보여 대안을 찾게 한다. ask 사유는 사용자(소유자)에게 한국어로 보여 준다.
+//   - deny 사유는 Claude 에게 보여 대안을 찾게 한다. ask 사유는 사용자에게 한국어로 보여 준다.
 //   - 이 스크립트 안의 오류는 조용히 통과시킨다(fail-open). 권한 규칙(settings.json)은 그대로 적용된다.
 //
-// 시험: node .claude/hooks/test-hooks.mjs
+// 시험: 저장소 .claude/skills/dev-setup/test-apply.mjs 가 이 파일을 실제로 실행해 확인한다.
 
 import fs from "node:fs";
 
@@ -39,11 +41,11 @@ function respond(decision, reason) {
   process.exit(0);
 }
 
-// ---------------------------------------------------------------------------
-// 정규화: 역슬래시→슬래시, 따옴표·백틱 제거, 공백 정리, 소문자
-// ---------------------------------------------------------------------------
+// 정규화: git -C/-c 의 따옴표 인자를 한 덩어리로 접고, 역슬래시→슬래시, 따옴표·백틱 제거, 공백 정리, 소문자
+//   (git -C "C:\내 폴더\repo" push --force 처럼 공백이 든 경로가 규칙을 피해 가지 못하게 먼저 접는다.)
 function norm(text) {
   return String(text ?? "")
+    .replace(/\bgit((?:\s+-[cC]\s+(?:"[^"]*"|'[^']*'|\S+))+)/gi, (m, opts) => "git" + opts.replace(/(-[cC]\s+)(?:"[^"]*"|'[^']*')/g, "$1x"))
     .replace(/\\/g, "/")
     .replace(/[`'"]/g, "")
     .replace(/[ \t\r]+/g, " ")
@@ -51,12 +53,140 @@ function norm(text) {
     .trim();
 }
 
-// 명령을 ; && || | 줄바꿈 단위로 자른다.
-function segments(normalized) {
-  return normalized
-    .split(/\n|;|&&|\|\||\|/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+// ---------------------------------------------------------------------------
+// 명령 나누기(따옴표·here-string·heredoc 을 아는 분리)
+//   ; && || | 줄바꿈 "밖에서만" 자른다. 따옴표 안의 글자는 쪼개지 않는다.
+//   → git commit -m "..." 메시지나 rg "git push --force" 검색어 안의 글자가 실행 명령으로 오인되지 않는다.
+// ---------------------------------------------------------------------------
+function splitCommand(raw) {
+  const s = String(raw ?? "");
+  const n = s.length;
+  const segs = []; // { text, sep }  sep = 이 조각 앞의 구분자
+  let cur = "";
+  let sep = "";
+  let pendingHeredoc = null;
+  const flush = (nextSep) => {
+    if (cur.trim()) segs.push({ text: cur, sep });
+    cur = "";
+    sep = nextSep;
+  };
+  let i = 0;
+  while (i < n) {
+    const ch = s[i];
+    const two = s.slice(i, i + 2);
+
+    // PowerShell here-string:  @" ... "@   /   @' ... '@   (여는 표시는 줄 끝에 온다)
+    if ((two === '@"' || two === "@'") && /^[ \t]*\r?\n/.test(s.slice(i + 2))) {
+      const close = "\n" + two[1] + "@";
+      const end = s.indexOf(close, i + 2);
+      const stop = end === -1 ? n : end + close.length;
+      cur += s.slice(i, stop);
+      i = stop;
+      continue;
+    }
+    // 따옴표 문자열
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < n) {
+        if (ch === '"' && (s[j] === "\\" || s[j] === "`")) {
+          j += 2;
+          continue;
+        }
+        if (s[j] === ch) break;
+        j++;
+      }
+      cur += s.slice(i, Math.min(j + 1, n));
+      i = j + 1;
+      continue;
+    }
+    // bash heredoc:  <<WORD  <<-WORD  <<'WORD'  <<"WORD"  (본문은 다음 줄부터 WORD 만 있는 줄까지)
+    if (two === "<<" && s[i + 2] !== "<") {
+      const m = /^<<-?[ \t]*(['"]?)([A-Za-z_][\w-]*)\1/.exec(s.slice(i));
+      if (m) {
+        pendingHeredoc = m[2];
+        cur += m[0];
+        i += m[0].length;
+        continue;
+      }
+    }
+    if (ch === "\n") {
+      if (pendingHeredoc) {
+        const re = new RegExp("\\n[ \\t]*" + pendingHeredoc + "[ \\t]*(?=\\r?\\n|$)");
+        const m = re.exec(s.slice(i));
+        const stop = m ? i + m.index + m[0].length : n;
+        cur += s.slice(i, stop);
+        i = stop;
+        pendingHeredoc = null;
+        continue;
+      }
+      flush("\n");
+      i++;
+      continue;
+    }
+    if (ch === ";") {
+      flush(";");
+      i++;
+      continue;
+    }
+    if (two === "&&" || two === "||") {
+      flush(two);
+      i += 2;
+      continue;
+    }
+    if (ch === "|") {
+      flush("|");
+      i++;
+      continue;
+    }
+    cur += ch;
+    i++;
+  }
+  flush("");
+  return segs;
+}
+
+// 실행이 아니라 "글자(데이터)"를 다루는 명령이면 따옴표·heredoc 안의 글자를 검사에서 뺀다.
+const DATA_VERBS = new Set(["rg", "grep", "egrep", "fgrep", "ag", "ack", "sls", "select-string", "findstr", "echo", "write-host", "write-output", "printf", "set-content", "add-content", "out-file", "cat", "tee"]);
+const INTERPRETERS = new Set(["python", "python3", "py", "node", "ruby", "perl", "php"]);
+const SHELLS = new Set(["bash", "sh", "zsh", "pwsh", "powershell", "cmd", "iex", "invoke-expression", "source", "."]);
+const GIT_TEXT_SUBS = new Set(["commit", "tag", "notes", "merge", "revert", "stash", "cherry-pick", "log", "grep", "show", "blame"]);
+
+function firstWord(seg) {
+  const m = /^\s*(?:&\s+|\.\s+)?([^\s]+)/.exec(seg);
+  if (!m) return "";
+  return m[1].replace(/^["']|["']$/g, "").split(/[\\/]/).pop().replace(/\.exe$/i, "").toLowerCase();
+}
+
+function gitSubcommand(seg) {
+  const m = /^\s*git(?:\s+(?:-[cC]\s+(?:"[^"]*"|'[^']*'|\S+)|--?[\w-]+(?:=\S+)?))*\s+([a-z-]+)/i.exec(seg);
+  return m ? m[1].toLowerCase() : "";
+}
+
+const HEREDOC_BODY = /<<-?[ \t]*(['"]?)([A-Za-z_][\w-]*)\1[^\n]*\n[\s\S]*?\n[ \t]*\2[ \t]*(?=\r?\n|$)/g;
+const HERESTRING_BODY = /@(["'])[ \t]*\r?\n[\s\S]*?\r?\n\1@/g;
+const QUOTED = /"(?:[^"\\`]|\\[\s\S]|`[\s\S])*"|'[^']*'/g;
+
+function stripData(seg, { quotes }) {
+  let t = seg.replace(HEREDOC_BODY, "<<x").replace(HERESTRING_BODY, "x");
+  if (quotes) t = t.replace(QUOTED, "x");
+  return t;
+}
+
+// 실행되는 글자만 남긴 세그먼트 목록
+function executableSegments(raw) {
+  const segs = splitCommand(raw);
+  // 앞 명령의 출력이 셸로 흘러가는 경우(cat <<EOF | bash)는 heredoc 도 실행 글자다.
+  const pipedToShell = segs.some((sg) => sg.sep === "|" && SHELLS.has(firstWord(sg.text)));
+  return segs.map((sg) => {
+    if (pipedToShell) return sg.text;
+    // 따옴표·here-string 으로 시작하는 조각은 문자열 값이다(예: @"..."@ | Set-Content). 셸로 흘러가지 않으면 데이터다.
+    if (/^\s*(@["']|["'])/.test(sg.text)) return stripData(sg.text, { quotes: true });
+    const w = firstWord(sg.text);
+    if (DATA_VERBS.has(w)) return stripData(sg.text, { quotes: true });
+    if (w === "git" && GIT_TEXT_SUBS.has(gitSubcommand(sg.text))) return stripData(sg.text, { quotes: true });
+    if (INTERPRETERS.has(w)) return stripData(sg.text, { quotes: false });
+    return sg.text;
+  });
 }
 
 const excerpt = (s, n = 140) => {
@@ -64,161 +194,86 @@ const excerpt = (s, n = 140) => {
   return one.length > n ? one.slice(0, n) + "…" : one;
 };
 
-// ---------------------------------------------------------------------------
-// 1) 비밀·계정·개인정보 경로
-//    (config/*.ini 에는 password= 평문이 들어 있을 수 있다. .gitignore 로도 다 못 막는다.)
-// ---------------------------------------------------------------------------
-const SENSITIVE_PATH = [
-  /(^|[\s/=:(])config\/[^\s/*?]+\.ini\b/, // config/xxx.ini  (config/*.ini 같은 글롭 문자열은 제외)
-  /(^|[\s/=:(])secrets\.ini\b/,
-  /(^|[\s/=:(])\.env(?!\.example\b)(\.[\w.-]+)?(?=$|[\s;|&)>])/, // .env, .env.local (예시 파일 제외)
-  /appdata\/local\/ka-hgis/, // 앱 설정·계정·주변유적 자료
-  /localappdata%?\/ka-hgis/,
-  /appdata\/local\/crashdumps/, // 크래시 덤프(메모리 조각 포함 가능)
-  /localappdata%?\/crashdumps/,
-  /\.config\/ka-hgis/, // GitHub 토큰 등
-  /(^|[\s/=:(])git\.env\b/,
-  /\.cursor\/mcp\.json/, // 다른 서버의 비밀이 섞여 있을 수 있는 사용자 MCP 설정
-  /desktop\/hgis-/, // 바탕화면 포터블 폴더(계정 평문 포함 가능)
-];
-
-// 비밀 경로를 언급해도 되는 "내용을 읽지 않는" 동사
-const SAFE_FIRST = /^(git (check-ignore|ls-files|status)\b|ls\b|dir\b|gci\b|get-childitem\b|test-path\b|get-item\b|resolve-path\b|split-path\b|join-path\b)/;
-
-// 내용을 읽거나·복사하거나·보내거나·실행하는 동사(전체 명령 어디에 있어도 안전 판정을 취소한다)
-const READERS =
-  /(^|[^\w-])(cat|type|gc|get-content|more|less|head|tail|sls|select-string|findstr|grep|egrep|rg|awk|sed|cut|sort|uniq|tee|cp|copy|copy-item|cpi|xcopy|robocopy|mv|move|move-item|mi|ren|rename-item|rm|del|remove-item|ri|erase|set-content|add-content|out-file|clear-content|iwr|curl|wget|invoke-webrequest|invoke-restmethod|certutil|base64|python3?|py|node|ruby|perl|php|powershell|pwsh|cmd|bash|sh|zsh|import-csv|convertfrom-json|convertfrom-stringdata|get-filehash|compress-archive|tar|zip|7z|start|start-process|notepad|code|explorer|invoke-item|ii|open|scp|ftp|nc|ncat)(?![\w-])/;
-
-function touchesSensitive(seg) {
-  return SENSITIVE_PATH.some((re) => re.test(seg));
-}
-
-// 계정·키 파일 경로 차단(아래 checkSensitiveInCommand / checkFileTool).
-// 2026-09-30 소유자가 "guard.mjs 계정 파일 차단을 꺼도 된다"고 승인해 기본은 꺼 둔다(차단하지 않음).
-// 문서·스크립트 편집 명령의 글자를 계정 파일 접근으로 오인해 작업이 막히는 일이 있었다.
-// 다시 켜려면 환경변수 KA_GUARD_SECRETS=1. (Read/Edit 도구의 계정 파일 거부 규칙은
-// .claude/settings.json 의 permissions.deny 에 그대로 있다. 강제 푸시·삭제 등 다른 점검은 그대로다.)
-const STRICT_SECRETS = process.env.KA_GUARD_SECRETS === "1";
-
-// 저장소 config/ 폴더 자체를 읽는 명령(예: Get-ChildItem config/ | Select-String password, rg password ./config/)
-// (git config, -Pattern config/ 처럼 폴더가 아니라 글자로 쓰인 경우는 제외)
-const DIR_CONFIG = /(^|[\s=:(])(?<!git )(?<!-pattern )(?<!-match )(?<!-value )(?:[\w.:~-]*\/)*config\/(?:\*\S*)?(?=$|[\s;|&)])/;
-
-function readsConfigDir(full) {
-  if (!READERS.test(full.replace(SAFE_FIRST, ""))) return false;
-  if (DIR_CONFIG.test(full)) return true;
-  return /(^|\s)config(\s|$)/.test(full) && /\.ini\b/.test(full); // Get-ChildItem config *.ini | Select-String …
-}
-
-function checkSensitiveInCommand(full, segs) {
-  if (!STRICT_SECRETS) return null;
-  if (readsConfigDir(full)) {
-    return {
-      level: "deny",
-      why:
-        "차단됨: config/ 폴더에는 계정·키 파일(password= 평문)이 있을 수 있어 내용을 읽거나 복사하지 않습니다. " +
-        "파일이 있는지만 보려면 Get-ChildItem/Test-Path 를, 설정 방법은 docs/user 와 코드(VworldSettings)를 근거로 안내하세요.",
-    };
-  }
-  const hits = segs.filter(touchesSensitive);
-  if (!hits.length) return null;
-  const onlyMetadata =
-    hits.every((s) => SAFE_FIRST.test(s) && !/>/.test(s)) && !READERS.test(full.replace(SAFE_FIRST, ""));
-  if (onlyMetadata) return null;
-  return {
-    level: "deny",
-    why:
-      "차단됨: 계정·키·개인정보 파일(config/*.ini, secrets.ini, .env, 사용자 앱 설정 폴더 %LOCALAPPDATA%\\ka-hgis, 크래시 덤프, 바탕화면 포터블 폴더)은 " +
-      "읽거나 바꾸거나 복사하지 않습니다. 파일이 있는지만 보려면 Test-Path, 무시 규칙은 git check-ignore 를 쓰세요. " +
-      "값이 필요하면 값을 묻지 말고 사용자에게 직접 설정하도록 안내하세요. 문서에 파일 이름만 적는 일은 Edit 도구로 하세요.",
-  };
-}
+// git 뒤에 올 수 있는 -c/-C 옵션(정규화 뒤에는 모두 소문자 -c)
+const GIT = String.raw`(^|[\s(])git( -c [^ ]+)* `;
+const gitRe = (body, flags = "") => new RegExp(GIT + body, flags);
 
 // ---------------------------------------------------------------------------
-// 2) 위험 명령 규칙 (세그먼트 단위)
+// 위험 명령 규칙 (세그먼트 단위)
 // ---------------------------------------------------------------------------
 const RULES = [
   // ---- git: 원격·기록을 되돌릴 수 없게 바꾸는 것
   {
     level: "deny",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* push\b/.test(s) && /( --force\b| --force-with-lease\b| --mirror\b| -f( |$)| \+[^\s]+)/.test(s),
+    test: (s) => gitRe("push\\b").test(s) && /( --force\b| --force-with-lease\b| --mirror\b| -f( |$)| \+[^\s]+)/.test(s),
     why: "차단됨: 강제 푸시(force push)는 하지 않습니다(원격 기록을 되돌릴 수 없게 바꿉니다). 일반 git push 만 사용자가 요청할 때 하세요.",
   },
   {
     level: "ask",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* push\b/.test(s) && /( --delete\b| -d( |$)| :[\w./-]+)/.test(s),
+    test: (s) => gitRe("push\\b").test(s) && /( --delete\b| -d( |$)| :[\w./-]+)/.test(s),
     why: "원격 브랜치를 지우려는 명령입니다. 정말 진행할까요?",
   },
   {
     level: "deny",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* (filter-branch|filter-repo|update-ref -d|reflog expire|gc --prune=now)\b/.test(s),
-    why: "차단됨: 저장소 기록을 다시 쓰는 명령입니다. 이 프로젝트는 히스토리 재작성을 하지 않습니다.",
+    test: (s) => gitRe("(filter-branch|filter-repo|update-ref -d|reflog expire|gc --prune=now)\\b").test(s),
+    why: "차단됨: 저장소 기록을 다시 쓰는 명령입니다. 히스토리 재작성은 하지 않습니다.",
   },
   {
     level: "deny",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* reset\b.* --hard\b/.test(s),
-    why: "차단됨: git reset --hard 는 저장하지 않은 작업을 지웁니다. 되돌리기가 필요하면 /ka-undo 스킬(또는 Claude Code 의 /rewind)을 쓰세요.",
+    test: (s) => gitRe("reset\\b.* --hard\\b").test(s),
+    why: "차단됨: git reset --hard 는 저장하지 않은 작업을 지웁니다. 되돌리기가 필요하면 Claude Code 의 /rewind 를 쓰거나 사용자에게 안내하세요.",
   },
   {
     level: "deny",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* clean\b/.test(s) && /( -[a-z]*f|--force)/.test(s),
+    test: (s) => gitRe("clean\\b").test(s) && /( -[a-z]*f|--force)/.test(s),
     why: "차단됨: git clean -f 는 추적하지 않는 파일(사용자가 만든 자료 포함)을 지웁니다.",
   },
   {
     level: "ask",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* (checkout|restore)\b/.test(s) && /( -- \.| \.$| --source| --staged --worktree| -f\b| --force\b)/.test(s),
+    test: (s) => gitRe("(checkout|restore)\\b").test(s) && /( -- \.| \.$| --source| --staged --worktree| -f\b| --force\b)/.test(s),
     why: "작업 폴더의 변경을 통째로 되돌리려는 명령입니다. 저장하지 않은 수정이 사라집니다. 정말 진행할까요?",
   },
   {
     level: "ask",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* (stash (drop|clear)|branch -d\b|branch --delete|tag -d\b|rebase\b|commit .*--amend)/.test(s),
+    test: (s) => gitRe("(stash (drop|clear)|branch -d\\b|branch --delete|tag -d\\b|rebase\\b|commit .*--amend)").test(s),
     why: "저장소 기록·브랜치·보관함을 바꾸는 명령입니다(되돌리기 어렵습니다). 정말 진행할까요?",
   },
   {
     level: "ask",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* (commit|push)\b/.test(s) && /( --no-verify\b| -n( |$))/.test(s),
+    test: (s) => gitRe("(commit|push)\\b").test(s) && /( --no-verify\b| -n( |$))/.test(s),
     why: "저장소의 안전 점검(pre-commit 훅)을 건너뛰려는 명령입니다. 정말 진행할까요?",
   },
   {
     level: "deny",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* add\b/.test(s) && /( -a\b| --all\b| \.( |$)| \*( |$))/.test(s),
+    // git add -A / --all / . / ./ / .\ / * / :/ / :(top) — 저장소 전체를 한꺼번에 올리는 모든 표기
+    test: (s) => gitRe("add\\b").test(s) && /( -a\b| --all\b| \.\/?( |$)| \*+( |$)| :\/( |$)| :\(top\)( |$))/.test(s),
     why:
-      "차단됨: git add -A / . / * 는 계정 파일(config/*.ini 등)이나 사용자 자료를 함께 올릴 수 있습니다. " +
-      "바꾼 파일을 하나씩 경로로 지정해서 git add -- <경로> 로 추가하세요(/ka-save 스킬이 이 순서를 따릅니다).",
+      "차단됨: git add -A / . / ./ / * 는 비밀 파일(.env 등)이나 사용자 자료를 함께 올릴 수 있습니다. " +
+      "바꾼 파일을 하나씩 경로로 지정해서 git add -- <경로> 로 추가하세요.",
   },
   {
     level: "ask",
-    test: (s) => /(^|[\s(])git( -c [^ ]+| -C [^ ]+)* commit\b/.test(s) && /( -[a-z]*a[a-z]*( |$)| --all\b)/.test(s) && !/ --amend/.test(s),
+    test: (s) => gitRe("commit\\b").test(s) && /( -[a-z]*a[a-z]*( |$)| --all\b)/.test(s) && !/ --amend/.test(s),
     why: "git commit -a 는 관련 없는 수정까지 한꺼번에 저장합니다. 경로를 지정해 저장하는 편이 안전합니다. 그래도 진행할까요?",
   },
 
-  // ---- 사용자의 실행 중인 앱·프로세스
-  {
-    level: "deny",
-    test: (s) => /(^|[^\w-])(stop-process|taskkill|pkill|killall|kill)( |$)/.test(s) && /ka-hgis/.test(s),
-    why: "차단됨: 사용자가 실행 중인 고고학 전용 HGIS(ka-hgis)는 요청 없이 끄거나 다시 시작하지 않습니다. 사용자에게 앱을 닫아 달라고 안내하세요.",
-  },
+  // ---- 실행 중인 프로세스
   {
     level: "ask",
     test: (s) => /(^|[^\w-])(stop-process|taskkill|pkill|killall)( |$)/.test(s),
-    why: "프로그램을 강제로 종료하려는 명령입니다. 어떤 프로그램인지 확인하세요. 정말 진행할까요?",
+    why: "프로그램을 강제로 종료하려는 명령입니다. 사용자가 실행 중인 프로그램이 아닌지 확인하세요. 정말 진행할까요?",
   },
 
-  // ---- 예약 작업·서비스·레지스트리·정책·원격 실행 (개인 PC 설정을 몰래 바꾸는 종류)
+  // ---- 예약 작업·서비스·레지스트리·정책 (개인 PC 설정을 바꾸는 종류)
   {
-    level: "deny",
+    level: "ask",
     test: (s) => /(^|[^\w-])(schtasks|register-scheduledtask|new-scheduledtask\w*|set-scheduledtask|unregister-scheduledtask|new-service|set-service|sc create|sc config|sc delete|reg (add|delete|import|load)|regedit|set-itemproperty hk|new-itemproperty hk|remove-itemproperty hk|set-executionpolicy|bcdedit|netsh (advfirewall|interface)|new-netfirewallrule|set-mppreference|add-mppreference)( |$)/.test(s),
-    why: "차단됨: 예약 작업·서비스·레지스트리·보안 정책은 사용자 PC 설정을 바꿉니다. 이 프로젝트는 숨은 자동화를 만들지 않습니다.",
+    why: "예약 작업·서비스·레지스트리·보안 정책은 사용자 PC 설정을 바꿉니다. 사용자가 요청한 작업이 맞나요?",
   },
   {
     level: "deny",
     test: (s) => /( -encodedcommand\b| -enc )/.test(s),
     why: "차단됨: 암호화(인코딩)된 명령은 무엇을 하는지 알 수 없어 실행하지 않습니다.",
-  },
-  {
-    level: "deny",
-    test: (s) => /auto-git-push|install-auto-push-task|run-auto-push-now|start-cursor-worker|orca-worktree-setup/.test(s) && !/uninstall-auto-push-task/.test(s),
-    why: "차단됨: 숨은 자동 푸시·원격 실행 워커 스크립트는 이 프로젝트 규칙(숨은 auto-push 금지, force-push 금지)과 충돌합니다. 폐기 예정입니다(docs/claude-code-guide.md 참고).",
   },
 
   // ---- 디스크·삭제
@@ -246,20 +301,8 @@ const RULES = [
   },
   {
     level: "ask",
-    test: (s) => /(^|[^\w-])(rm|del|erase|remove-item|ri|mv|move|move-item|mi|ren|rename-item)( |$)/.test(s) && /\.(gpkg|qgz|qgs|gpkg-wal|gpkg-shm)\b/.test(s),
-    why: "조사 원본(.gpkg/.qgz)을 지우거나 옮기거나 이름을 바꾸려는 명령입니다. 원본은 저장·내보내기·편집 요청이 아니면 건드리지 않습니다. 정말 진행할까요?",
-  },
-
-  // ---- 배포·포터블 (사용자가 명시적으로 요청할 때만)
-  {
-    level: "ask",
-    test: (s) => /(publish-desktop|make-portable|verify-portable-pack|sign-release)\.ps1/.test(s) || /dist\/ka-hgis-portable/.test(s),
-    why: "포터블 생성·바탕화면/L: 복사·배포 작업입니다. 사용자가 직접 요청했을 때만 진행합니다. 요청하신 작업이 맞나요?",
-  },
-  {
-    level: "ask",
     test: (s) => /(^|[^\w-])(npm|pnpm|yarn|pip3?|py -3 -m pip|winget|choco|scoop) (install|i|add|upgrade|update|uninstall)\b/.test(s) || /(^|[^\w-])(winget|choco|scoop) (install|upgrade|uninstall)\b/.test(s),
-    why: "프로그램(패키지)을 설치·변경하려는 명령입니다. 이 프로젝트는 새 의존성을 요청 없이 추가하지 않습니다. 정말 진행할까요?",
+    why: "프로그램(패키지)을 설치·변경하려는 명령입니다. 새 의존성은 요청 없이 추가하지 않습니다. 정말 진행할까요?",
   },
 ];
 
@@ -282,10 +325,7 @@ const WHOLE_RULES = [
 function checkCommand(rawCommand) {
   const full = norm(rawCommand);
   if (!full) return null;
-  const segs = segments(full);
-
-  const sensitive = checkSensitiveInCommand(full, segs);
-  if (sensitive) return sensitive;
+  const segs = executableSegments(rawCommand).map(norm).filter(Boolean);
 
   for (const rule of WHOLE_RULES) {
     try {
@@ -312,43 +352,18 @@ function checkCommand(rawCommand) {
   return asked;
 }
 
-// 파일 도구(Read/Grep/Glob)의 경로 검사
-function checkFileTool(input) {
-  if (!STRICT_SECRETS) return null;
-  const ti = input.tool_input ?? {};
-  // Grep 의 pattern 은 "찾을 글자"이지 경로가 아니다. 경로로 쓰이는 필드만 본다.
-  const fields = input.tool_name === "Glob" ? [ti.pattern, ti.path] : input.tool_name === "Grep" ? [ti.path, ti.glob] : [ti.file_path];
-  const candidates = fields.filter((v) => typeof v === "string");
-  for (const c of candidates) {
-    const n = norm(c);
-    if (touchesSensitive(` ${n}`) || touchesSensitive(n)) {
-      return {
-        level: "deny",
-        why:
-          "차단됨: 계정·키·개인정보 파일은 열지 않습니다(config/*.ini, secrets.ini, .env, %LOCALAPPDATA%\\ka-hgis, 크래시 덤프). " +
-          "설정 방법이 궁금하면 문서(docs/user)와 코드의 VworldSettings 를 근거로 안내하세요.",
-      };
-    }
-  }
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 try {
   const input = readInput();
   const tool = String(input.tool_name ?? "");
-  let verdict = null;
 
   if (tool === "Bash" || tool === "PowerShell") {
-    verdict = checkCommand(input.tool_input?.command);
-    if (verdict?.level === "ask") {
-      verdict.why = `${verdict.why}\n(명령: ${excerpt(input.tool_input?.command)})`;
+    const verdict = checkCommand(input.tool_input?.command);
+    if (verdict) {
+      if (verdict.level === "ask") verdict.why = `${verdict.why}\n(명령: ${excerpt(input.tool_input?.command)})`;
+      respond(verdict.level, verdict.why);
     }
-  } else if (tool === "Read" || tool === "Grep" || tool === "Glob") {
-    verdict = checkFileTool(input);
   }
-
-  if (verdict) respond(verdict.level, verdict.why);
 } catch {
   // 훅 자체의 오류는 작업을 막지 않는다.
 }

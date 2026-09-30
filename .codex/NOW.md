@@ -9,6 +9,15 @@
 - 확인(Linux 클라우드): 훅 시험 157, 설치기 시험 65 통과. 설정 3개 스키마 검사(schemastore) 통과. 실제 `claude` 2.1.285가 모델·출력 스타일 ka-easy·스킬 13·에이전트 2를 읽고 `/개발설정 점검`을 스킬로 실행. 새/수정 `.ps1` 12개 PS7 구문 OK, PS7 전용 문법 없음, 한글 `.ps1` 전부 BOM, `.bat` ASCII. secret-scan OK.
 - **미확인(Windows PC 필요)**: `claude-dev.bat`·`setup-claude-dev.bat` 실행, `ka-doctor/ka-build/ka-test/ka-smoke` 실동작, Graft·Archify 설치, 한글 경로, Windows PowerShell 5.1 실행. 클라우드에서는 빌드·ctest·smoke를 하지 않았고 통과라고 쓰지 않는다. 커밋·푸시는 이 항목 작성 뒤 사용자 요청에 따라 브랜치 `claude/wonderful-sagan-jpzo7l`에만.
 
+## 2026-09-30 (추가) 범용 전역 설치본 — GIS 무관, 원클릭
+
+- 전역 설정은 특정 프로젝트 전용이 아니어야 한다는 요구. 전역 훅(`.claude/skills/dev-setup/assets/hooks/guard.mjs`)을 GIS 전용 규칙 없이 범용으로 새로 썼다(따옴표·커밋 메시지·heredoc 안의 글자는 실행이 아니라서 막지 않고, `bash -c "…"`·`| bash`는 계속 막음). 저장소용 훅(`.claude/hooks/guard.mjs`)은 그대로다.
+- 전역 허용 목록에서 `cmake *`·`ctest *` 통째 허용을 빼고 `cmake --build/--preset/-S/-B`, `ctest --preset/--test-dir`만 허용(`cmake -P/-E`로 임의 실행 방지). 훅 대상은 `Bash|PowerShell`만.
+- 설치기 보강: settings.json 을 먼저 읽어 못 읽으면 아무것도 쓰기 전에 멈춤 / 관리 블록 시작·끝 표시가 어긋나면 손대지 않음 / 형식이 이상한 값은 덮어쓰지 않고 알림 / 전용 설정이 있는 프로젝트는 이름과 무관하게 건너뜀.
+- PC용 원클릭: `.claude/skills/dev-setup/bundle/`(`INSTALL-GLOBAL.bat`·`CHECK-ONLY.bat`·`install-global.ps1`·`README-ko.txt`). ZIP `claude-dev-global-setup.zip`은 `dev-setup` 폴더 + 이 파일들. Node.js 18+ 필요(없으면 winget 설치를 물음).
+- 확인(Linux): 설치기 시험 151, 훅 시험 157 통과. 한글·공백 경로에 푼 ZIP을 PowerShell 7로 실행해 미리보기(파일 0개 씀)→적용(17개)→재실행(변경 0·백업 0) 확인. **Windows PowerShell 5.1·`.bat` 더블클릭 실행은 미확인.**
+- 독립 검토 2건(설정 정합성, Windows 스크립트·문서)의 지적 중 `ka-test.ps1`이 실패 시험에서 죽는 문제, `claude-dev.ps1`이 `-c` 같은 옵션을 삼키는 문제, 훅의 증거 판정 정확도 등은 아직 고치지 않았다(다음 작업).
+
 ## 2026-09-28 측량 등고선이 맞다
 
 - 사용자가 화면의 측량 등고선을 맞다고 확인했다. 이 남북 방향을 되돌리지 않는다.

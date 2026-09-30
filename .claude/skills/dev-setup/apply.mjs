@@ -6,7 +6,7 @@
 //
 // 전역(scope=global): <홈>/.claude 에 settings.json 병합, CLAUDE.md 관리 블록, hooks(guard·statusline), 이 스킬 자체를 설치한다.
 // 프로젝트(scope=project): 현재 폴더가 C++ 프로젝트(또는 빈 폴더)면 .claude/settings.json·hooks·rules, CLAUDE.md,
-//   .clangd·.clang-format·.clang-tidy, .gitignore 블록을 없는 것만 만든다. ka-hgis 는 이미 전용 설정이 있어 건드리지 않는다.
+//   .clangd·.clang-format·.clang-tidy, .gitignore 블록을 없는 것만 만든다. 이미 전용 Claude 설정이 있는 프로젝트는 건드리지 않는다.
 //
 // 원칙: 멱등(여러 번 돌려도 같음) · 덮어쓰기 전 백업(<파일>.bak-날짜-시각) · 사용자 값은 --force 없이는 유지 ·
 //       설정 JSON 이 깨져 있거나 주석이 있으면 손대지 않고 알린다 · --check 는 아무것도 쓰지 않는다.
@@ -155,13 +155,25 @@ function readSettings(file) {
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
-// 스칼라: 없으면 넣고, 다르면 --force 일 때만 덮어쓴다.
-function setScalar(obj, keys, value, changes) {
+// 중간 경로를 내려간다. 없으면 만들고, 있는데 객체가 아니면(손으로 잘못 쓴 값) 덮어쓰지 않고 null 을 돌려 그 항목을 건너뛴다.
+function descend(obj, keys, changes) {
   let cur = obj;
   for (let i = 0; i < keys.length - 1; i++) {
-    if (!isObj(cur[keys[i]])) cur[keys[i]] = {};
+    const v = cur[keys[i]];
+    if (v === undefined) cur[keys[i]] = {};
+    else if (!isObj(v)) {
+      changes.push({ kind: "malformed", key: keys.slice(0, i + 1).join("."), expected: "객체({ })" });
+      return null;
+    }
     cur = cur[keys[i]];
   }
+  return cur;
+}
+
+// 스칼라: 없으면 넣고, 다르면 --force 일 때만 덮어쓴다.
+function setScalar(obj, keys, value, changes) {
+  const cur = descend(obj, keys, changes);
+  if (!cur) return;
   const k = keys[keys.length - 1];
   const name = keys.join(".");
   if (!(k in cur)) {
@@ -178,13 +190,14 @@ function setScalar(obj, keys, value, changes) {
 }
 
 function unionArray(obj, keys, values, changes) {
-  let cur = obj;
-  for (let i = 0; i < keys.length - 1; i++) {
-    if (!isObj(cur[keys[i]])) cur[keys[i]] = {};
-    cur = cur[keys[i]];
-  }
+  const cur = descend(obj, keys, changes);
+  if (!cur) return;
   const k = keys[keys.length - 1];
-  if (!Array.isArray(cur[k])) cur[k] = [];
+  if (cur[k] === undefined) cur[k] = [];
+  else if (!Array.isArray(cur[k])) {
+    changes.push({ kind: "malformed", key: keys.join("."), expected: "목록([ ])" });
+    return;
+  }
   let added = 0;
   for (const v of values) {
     if (!cur[k].includes(v)) {
@@ -196,14 +209,23 @@ function unionArray(obj, keys, values, changes) {
 }
 
 function hookSig(h) {
-  return `${h.command ?? ""} ${(h.args ?? []).join(" ")}`.trim();
+  if (!isObj(h)) return "";
+  return `${h.command ?? ""} ${(Array.isArray(h.args) ? h.args : []).join(" ")}`.trim();
 }
 
 function mergeHooks(obj, tmplHooks, changes) {
-  if (!isObj(obj.hooks)) obj.hooks = {};
+  if (obj.hooks === undefined) obj.hooks = {};
+  else if (!isObj(obj.hooks)) {
+    changes.push({ kind: "malformed", key: "hooks", expected: "객체({ })" });
+    return;
+  }
   for (const [event, groups] of Object.entries(tmplHooks)) {
-    if (!Array.isArray(obj.hooks[event])) obj.hooks[event] = [];
-    const existingSigs = obj.hooks[event].flatMap((g) => (g.hooks ?? []).map(hookSig));
+    if (obj.hooks[event] === undefined) obj.hooks[event] = [];
+    else if (!Array.isArray(obj.hooks[event])) {
+      changes.push({ kind: "malformed", key: `hooks.${event}`, expected: "목록([ ])" });
+      continue;
+    }
+    const existingSigs = obj.hooks[event].flatMap((g) => (isObj(g) && Array.isArray(g.hooks) ? g.hooks : []).map(hookSig));
     for (const g of groups) {
       const sigs = (g.hooks ?? []).map(hookSig);
       const base = (s) => path.basename(s.split(" ").pop() || "");
@@ -277,6 +299,9 @@ function reportChanges(scope, file, changes) {
   for (const c of diffs) {
     note(scope, "warn", file, `내 값을 유지함: ${c.key} = ${JSON.stringify(c.from)} (권장 ${JSON.stringify(c.to)}). 권장값으로 바꾸려면 '강제'`);
   }
+  for (const c of changes.filter((x) => x.kind === "malformed")) {
+    note(scope, "warn", file, `형식이 예상과 달라 그 항목은 건드리지 않았습니다: ${c.key} (예상 형식: ${c.expected}). 파일을 확인해 고친 뒤 다시 실행하세요.`);
+  }
 }
 
 // ------------------------------------------------------------------ 관리 블록(CLAUDE.md, .gitignore)
@@ -287,9 +312,14 @@ function upsertBlock(scope, file, begin, end, body, { label }) {
   const bom = text.charCodeAt(0) === 0xfeff ? "﻿" : "";
   if (bom) text = text.slice(1);
   const i = text.indexOf(begin);
-  const j = text.indexOf(end);
+  const j = i === -1 ? -1 : text.indexOf(end, i + begin.length);
+  // 시작 표시와 끝 표시가 짝이 맞지 않으면(손으로 지운 경우) 사용자 글을 지울 수 있어 아무것도 쓰지 않는다.
+  if ((i !== -1 && j === -1) || (i === -1 && text.includes(end))) {
+    note(scope, "warn", file, "관리 블록의 시작/끝 표시(BEGIN/END 개발설정 줄)가 짝이 맞지 않아 이 파일은 손대지 않았습니다. 짝이 맞지 않는 표시 줄을 지운 뒤 다시 실행하세요.");
+    return "keep";
+  }
   let next;
-  if (i !== -1 && j !== -1 && j > i) {
+  if (i !== -1 && j !== -1) {
     next = text.slice(0, i) + block + text.slice(j + end.length).replace(/^\r?\n/, "");
   } else {
     next = text.replace(/\s*$/, "") + (text.trim() ? "\n\n" : "") + block;
@@ -303,16 +333,18 @@ function applyGlobal() {
   const win = PLATFORM === "win32";
   const hooksDir = fwd(path.join(CLAUDE_HOME, "hooks"));
 
+  // 0) 무엇이든 쓰기 전에 settings.json 을 먼저 읽는다(주석·쉼표 오류로 읽지 못하면 여기서 멈추고 아무 파일도 만들지 않는다).
+  const settingsPath = path.join(CLAUDE_HOME, "settings.json");
+  const tmpl = substitute(JSON.parse(readText(path.join(ASSETS, "global", "settings.json"))), { __HOOKS_DIR__: hooksDir });
+  const { data, existed } = readSettings(settingsPath);
+  const { merged, changes } = mergeSettings(data, tmpl, { win });
+
   // 1) hooks
   for (const f of ["guard.mjs", "statusline.mjs"]) {
     put(scope, path.join(CLAUDE_HOME, "hooks", f), readBuf(path.join(ASSETS, "hooks", f)), { label: "훅 스크립트" });
   }
 
-  // 2) settings.json 병합
-  const settingsPath = path.join(CLAUDE_HOME, "settings.json");
-  const tmpl = substitute(JSON.parse(readText(path.join(ASSETS, "global", "settings.json"))), { __HOOKS_DIR__: hooksDir });
-  const { data, existed } = readSettings(settingsPath);
-  const { merged, changes } = mergeSettings(data, tmpl, { win });
+  // 2) settings.json 쓰기
   const text = JSON.stringify(merged, null, 2) + "\n";
   if (!existed) {
     put(scope, settingsPath, text, { label: "전역 설정 새로 만듦" });
@@ -333,7 +365,8 @@ function applyGlobal() {
   if (path.resolve(dest) === path.resolve(SKILL_DIR)) {
     note(scope, "keep", dest, "이미 전역 스킬 위치에서 실행 중");
   } else {
-    copyTree(scope, SKILL_DIR, dest, (s, ent) => !/^test-.*\.mjs$/.test(ent.name) && !/\.bak-/.test(ent.name));
+    // 시험 파일·백업 파일·PC 설치용 포장 폴더(bundle)는 전역 스킬 폴더에 넣지 않는다.
+    copyTree(scope, SKILL_DIR, dest, (s, ent) => !/^test-.*\.mjs$/.test(ent.name) && !/\.bak-/.test(ent.name) && !(ent.isDirectory() && ent.name === "bundle"));
   }
 }
 
@@ -361,9 +394,13 @@ function hasCppSources(dir, depth = 2) {
 function detectProject(dir) {
   const has = (n) => exists(path.join(dir, n));
   const entries = listDirSafe(dir).filter((e) => e.name !== ".git");
-  const isKa = has(path.join(".claude", "hooks", "dev-loop.mjs")) || (has("AGENTS.md") && /ka-hgis/i.test(safeRead(path.join(dir, "AGENTS.md"))));
+  // 이미 그 프로젝트 전용 Claude 설정이 있으면(프로젝트 전용 검증 훅이 있거나, .claude/settings.json 과 CLAUDE.md 가 둘 다 있는데
+  // 그 CLAUDE.md 가 이 설치기가 만든 것이 아니면) 골격을 새로 만들지 않는다. 특정 프로젝트 이름은 보지 않는다.
+  // 이 설치기가 만든 CLAUDE.md(템플릿의 "자동 감지한 값으로 만들었습니다" 문구가 남은 것)는 다시 실행해도 같은 결과가 되도록 계속 관리 대상이다.
+  const ownClaudeMd = has("CLAUDE.md") && !/\/개발설정`이 자동 감지한 값으로 만들었습니다/.test(safeRead(path.join(dir, "CLAUDE.md")));
+  const hasOwnSetup = has(path.join(".claude", "hooks", "dev-loop.mjs")) || (has(path.join(".claude", "settings.json")) && ownClaudeMd);
   return {
-    isKa,
+    hasOwnSetup,
     isEmpty: entries.length === 0,
     isCpp: has("CMakeLists.txt") || has("meson.build") || has("CMakePresets.json") || hasCppSources(dir),
   };
@@ -444,8 +481,9 @@ function layoutFor(dir) {
 function applyProject() {
   const scope = "project";
   const det = detectProject(PROJECT);
-  if (det.isKa) {
-    note(scope, "skip", PROJECT, "ka-hgis 전용 설정이 이미 있습니다(.claude/settings.json·hooks·rules·skills). 프로젝트 골격은 만들지 않고 전역 설정만 적용합니다.");
+  if (det.hasOwnSetup) {
+    // '강제'(내 값 덮어쓰기)와 함께여도 건너뛴다: 프로젝트 전용 설정을 범용 권장값으로 덮어쓰면 안 된다.
+    note(scope, "skip", PROJECT, "이 프로젝트에는 전용 Claude 설정이 이미 있습니다(.claude/settings.json 과 CLAUDE.md). 프로젝트 골격은 만들지 않고 전역 설정만 적용합니다.");
     return;
   }
   if (!det.isCpp && !det.isEmpty && !args.force) {
@@ -455,14 +493,15 @@ function applyProject() {
   if (det.isEmpty) note(scope, "info", PROJECT, "빈 폴더: 새 C++ 프로젝트 초기 설정(설정·규칙·clang 파일)만 만듭니다. 코드는 만들지 않습니다.");
 
   const claude = path.join(PROJECT, ".claude");
-  // 훅
-  for (const f of ["guard.mjs", "statusline.mjs"]) putIfAbsent(scope, path.join(claude, "hooks", f), readBuf(path.join(ASSETS, "hooks", f)), { label: "훅 스크립트" });
-
-  // settings.json: 없으면 만들고, 있으면 관리 키만 병합(사용자 값 유지)
+  // settings.json 을 먼저 읽는다(읽지 못하면 아무 파일도 만들기 전에 멈춘다). 없으면 만들고, 있으면 관리 키만 병합(사용자 값 유지).
   const sPath = path.join(claude, "settings.json");
   const tmpl = JSON.parse(readText(path.join(ASSETS, "project-cpp", "settings.json")));
   const { data, existed } = readSettings(sPath);
   const { merged, changes } = mergeSettings(data, tmpl, { win: false });
+
+  // 훅
+  for (const f of ["guard.mjs", "statusline.mjs"]) putIfAbsent(scope, path.join(claude, "hooks", f), readBuf(path.join(ASSETS, "hooks", f)), { label: "훅 스크립트" });
+
   if (!existed) put(scope, sPath, JSON.stringify(merged, null, 2) + "\n", { label: "프로젝트 설정 새로 만듦" });
   else if (JSON.stringify(data) === JSON.stringify(merged)) note(scope, "keep", sPath, "이미 최신");
   else put(scope, sPath, JSON.stringify(merged, null, 2) + "\n", { label: "프로젝트 설정 병합(내 설정은 유지)" });
@@ -548,7 +587,8 @@ if (args.json) {
 } else {
   console.log(`개발설정 ${args.check ? "점검(아무것도 쓰지 않음)" : "적용"} — 범위: ${{ all: "전역+프로젝트", global: "전역", project: "프로젝트" }[args.scope]}${args.force ? " · 강제" : ""}`);
   console.log(`전역 폴더: ${CLAUDE_HOME}`);
-  console.log(`프로젝트: ${PROJECT}\n`);
+  if (args.scope !== "global") console.log(`프로젝트: ${PROJECT}`);
+  console.log("");
   const order = ["create", "update", "backup", "warn", "info", "skip", "keep"];
   for (const kind of order) {
     const rows = actions.filter((a) => a.kind === kind);

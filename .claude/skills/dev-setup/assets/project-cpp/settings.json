@@ -9,12 +9,20 @@
 
   "permissions": {
     "allow": [
-      "Bash(cmake *)",
-      "Bash(ctest *)",
+      "Bash(cmake --build *)",
+      "Bash(cmake --preset *)",
+      "Bash(cmake -S *)",
+      "Bash(cmake -B *)",
+      "Bash(ctest --preset *)",
+      "Bash(ctest --test-dir *)",
       "Bash(clang-format *)",
       "Bash(clang-tidy *)",
-      "PowerShell(cmake *)",
-      "PowerShell(ctest *)",
+      "PowerShell(cmake --build *)",
+      "PowerShell(cmake --preset *)",
+      "PowerShell(cmake -S *)",
+      "PowerShell(cmake -B *)",
+      "PowerShell(ctest --preset *)",
+      "PowerShell(ctest --test-dir *)",
       "PowerShell(clang-format *)",
       "PowerShell(clang-tidy *)"
     ],
@@ -35,7 +43,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell|Read|Grep|Glob",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",

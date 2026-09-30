@@ -78,4 +78,4 @@ if (pend > 0) parts.push(c("33", `⚠ C++ 수정 ${pend}개 검증 대기`));
 const five = input.rate_limits?.five_hour?.used_percentage;
 if (typeof five === "number") parts.push(dim(`5시간 한도 ${Math.round(five)}%`));
 
-process.stdout.write((parts.length ? parts.join(dim(" │ ")) : "ka-hgis") + "\n");
+process.stdout.write((parts.length ? parts.join(dim(" │ ")) : "Claude Code") + "\n");

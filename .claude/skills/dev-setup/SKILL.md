@@ -18,9 +18,10 @@ allowed-tools: PowerShell(node "${CLAUDE_SKILL_DIR}/apply.mjs" *) Bash(node "${C
    `node "${CLAUDE_SKILL_DIR}/apply.mjs" $ARGUMENTS --project "${CLAUDE_PROJECT_DIR}"`
 4. 출력을 다음 네 덩어리로 짧게 요약한다: **적용된 것 / 내 값을 유지한 것(주의) / 건너뛴 것과 이유 / 백업 위치**. 백업(`*.bak-날짜-시각`)은 문제가 생기면 그 파일로 되돌리면 된다고 알린다.
 5. `✘`가 있으면 원인을 쉬운 말로 설명한다(예: 설정 파일에 주석이 있어 자동 병합을 하지 않았다 → 파일을 고친 뒤 다시 실행).
-6. 마지막에 **다음 할 일**을 알린다: Claude Code 를 다시 시작(또는 `/clear`)하면 새 설정이 모두 적용되고, `/status`·`/hooks`·`/permissions`로 확인할 수 있다. Windows 에서 Graft·Archify 같은 개발 도구가 없으면 저장소의 `scripts\setup-claude-dev.bat` 을 안내한다.
+6. 마지막에 **다음 할 일**을 알린다: Claude Code 를 다시 시작(또는 `/clear`)하면 새 설정이 모두 적용되고, `/status`·`/hooks`·`/permissions`로 확인할 수 있다. 프로젝트에 자체 설치 안내(예: `docs/` 의 개발 환경 문서)가 있으면 그것을 이어서 안내한다.
 
 ## 무엇이 등록되나
 - **전역**(`~/.claude`): `settings.json`(모델 Opus 5.5·노력 high·한국어·시간 제한·안전 권한·시작 시 위험 명령 점검 훅·상태 줄), `CLAUDE.md`(C++ 개발 원칙, 관리 블록만 갱신), `hooks/`(guard·statusline), 그리고 이 스킬 자체(어느 프로젝트에서나 `/개발설정`).
-- **프로젝트**(현재 폴더, C++ 프로젝트 또는 빈 폴더): `.claude/settings.json`·`hooks/`·`rules/cpp.md`, `CLAUDE.md`(빌드·시험 명령을 자동 감지), `.clangd`·`.clang-format`·`.clang-tidy`, `.gitignore` 관리 블록. 이미 있는 파일은 그대로 두고 없는 것만 만든다. ka-hgis 저장소는 전용 설정이 이미 있어 프로젝트 골격을 만들지 않는다.
+- **프로젝트**(현재 폴더, C++ 프로젝트 또는 빈 폴더): `.claude/settings.json`·`hooks/`·`rules/cpp.md`, `CLAUDE.md`(빌드·시험 명령을 자동 감지), `.clangd`·`.clang-format`·`.clang-tidy`, `.gitignore` 관리 블록. 이미 있는 파일은 그대로 두고 없는 것만 만든다. 이미 전용 Claude 설정(`.claude/settings.json` 과 직접 쓴 `CLAUDE.md`)이 있는 프로젝트는 골격을 만들지 않고 전역 설정만 적용한다.
+- **어느 프로젝트에도 묶이지 않는다.** 전역 설정·훅·지침에는 특정 프로젝트(GIS 등)의 규칙이 없다. 프로젝트 전용 규칙은 그 프로젝트의 `.claude/` 에 둔다(전역과 프로젝트 훅은 둘 다 실행된다).
 - 여러 번 실행해도 같은 결과다(멱등). 새 C++ 프로젝트를 시작할 때마다 그 폴더에서 `/개발설정 프로젝트`를 실행하면 초기 설정이 갖춰진다.
